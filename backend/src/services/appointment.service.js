@@ -4,7 +4,7 @@ import Patient from '../models/Patient.js';
 import User from '../models/User.js';
 import { RuleError, assertTransition } from './statusMachine.js';
 import { recordEvent } from './audit.js';
-
+import VisitNote from '../models/VisitNote.js';
 function assertCanManage(user, providerId, action) {
   if (user.role === 'FRONT_DESK') return;
   if (user._id.toString() === providerId.toString()) return;
@@ -34,7 +34,127 @@ async function loadOr404(id, session) {
   if (!appt) throw new RuleError('Appointment not found.', 404);
   return appt;
 }
+export async function addNote(appointmentId, { body }, actor) {
+  return withTransaction(async (session) => {
+    const appt = await loadOr404(appointmentId, session);
 
+    if (actor.role !== 'PROVIDER') {
+      throw new RuleError('Only providers can write visit notes.', 403);
+    }
+
+    const onCareTeam = appt.careTeam.some(
+      (m) => m.providerId.toString() === actor._id.toString()
+    );
+    const isScheduling = appt.providerId.toString() === actor._id.toString();
+    if (!isScheduling && !onCareTeam) {
+      throw new RuleError('You are not on this appointment.', 403);
+    }
+
+    const [note] = await VisitNote.create(
+      [{ appointmentId: appt._id, authorId: actor._id, authorName: actor.name, body }],
+      { session }
+    );
+
+    await recordEvent(
+      {
+        appointmentId: appt._id,
+        actor,
+        type: 'NOTE_ADDED',
+        detail: { noteId: note._id.toString() },
+      },
+      session
+    );
+
+    return note;
+  });
+}
+
+export async function editNote(noteId, { body }, actor) {
+  const note = await VisitNote.findById(noteId);
+  if (!note) throw new RuleError('Visit note not found.', 404);
+
+  if (note.authorId.toString() !== actor._id.toString()) {
+    throw new RuleError('You can only edit visit notes you wrote.', 403);
+  }
+
+  note.body = body;
+  await note.save();
+  return note;
+}
+
+export async function addSupportingProvider(appointmentId, { providerId }, actor) {
+  return withTransaction(async (session) => {
+    const appt = await loadOr404(appointmentId, session);
+    assertCanManage(actor, appt.providerId, 'change the care team');
+
+    if (appt.providerId.toString() === providerId) {
+      throw new RuleError('That provider is already the scheduling provider.');
+    }
+    if (appt.careTeam.some((m) => m.providerId.toString() === providerId)) {
+      throw new RuleError('That provider is already on the care team.');
+    }
+
+    const provider = await User.findById(providerId).session(session);
+    if (!provider || provider.role !== 'PROVIDER') {
+      throw new RuleError('That provider does not exist.', 400);
+    }
+
+    appt.careTeam.push({ providerId: provider._id, assignedBy: actor._id });
+    await appt.save({ session });
+
+    await recordEvent(
+      {
+        appointmentId: appt._id,
+        actor,
+        type: 'SUPPORT_ADDED',
+        detail: { providerId: provider._id.toString(), providerName: provider.name },
+      },
+      session
+    );
+
+    return appt;
+  });
+}
+
+export async function removeSupportingProvider(appointmentId, providerId, actor) {
+  return withTransaction(async (session) => {
+    const appt = await loadOr404(appointmentId, session);
+    assertCanManage(actor, appt.providerId, 'change the care team');
+
+    const member = appt.careTeam.find((m) => m.providerId.toString() === providerId);
+    if (!member) throw new RuleError('That provider is not on the care team.', 404);
+
+    const removed = await User.findById(providerId).session(session);
+
+    appt.careTeam = appt.careTeam.filter((m) => m.providerId.toString() !== providerId);
+    await appt.save({ session });
+
+    await recordEvent(
+      {
+        appointmentId: appt._id,
+        actor,
+        type: 'SUPPORT_REMOVED',
+        detail: { providerId, providerName: removed?.name ?? 'Unknown' },
+      },
+      session
+    );
+
+    return appt;
+  });
+}
+
+export async function listMySchedule(actor, { includeArchived = false } = {}) {
+  if (actor.role !== 'PROVIDER') {
+    throw new RuleError('This view is for providers.', 403);
+  }
+
+  const query = {
+    $or: [{ providerId: actor._id }, { 'careTeam.providerId': actor._id }],
+  };
+  if (!includeArchived) query.archivedAt = null;
+
+  return Appointment.find(query).sort({ startsAt: 1 });
+}
 export async function findOverlap({ providerId, startsAt, endsAt, excludeId = null }, session) {
   const query = {
     providerId,

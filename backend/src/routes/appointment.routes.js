@@ -6,7 +6,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { STATUSES } from '../models/Appointment.js';
 import * as service from '../services/appointment.service.js';
-
+import VisitNote from '../models/VisitNote.js';
+const noteSchema = z.object({ body: z.string().min(1).max(5000) });
 const router = Router();
 router.use(requireAuth);
 
@@ -74,8 +75,30 @@ router.get('/:id', async (req, res) => {
   const appt = await Appointment.findById(req.params.id);
   if (!appt) return res.status(404).json({ error: 'Appointment not found.' });
 
-  const timeline = await AppointmentEvent.find({ appointmentId: appt._id }).sort({ createdAt: 1 });
-  res.json({ appointment: appt, timeline });
+  const [timeline, notes] = await Promise.all([
+    AppointmentEvent.find({ appointmentId: appt._id }).sort({ createdAt: 1 }),
+    VisitNote.find({ appointmentId: appt._id }).sort({ createdAt: 1 }),
+  ]);
+
+  res.json({ appointment: appt, timeline, notes });
+});
+router.post('/:id/notes', validate(noteSchema), async (req, res) => {
+  res.status(201).json(await service.addNote(req.params.id, req.body, req.user));
 });
 
+router.patch('/notes/:noteId', validate(noteSchema), async (req, res) => {
+  res.json(await service.editNote(req.params.noteId, req.body, req.user));
+});
+
+router.post('/:id/care-team', validate(z.object({ providerId: objectId })), async (req, res) => {
+  res.json(await service.addSupportingProvider(req.params.id, req.body, req.user));
+});
+
+router.delete('/:id/care-team/:providerId', async (req, res) => {
+  res.json(await service.removeSupportingProvider(req.params.id, req.params.providerId, req.user));
+});
+
+router.get('/mine/schedule', async (req, res) => {
+  res.json(await service.listMySchedule(req.user, { includeArchived: req.query.archived === 'true' }));
+});
 export default router;
