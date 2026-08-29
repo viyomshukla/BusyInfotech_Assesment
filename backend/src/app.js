@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes.js';
 import appointmentRoutes from './routes/appointment.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
+import userRoutes from './routes/user.routes.js';
 const app = express();
 
 app.use(helmet());
@@ -17,7 +19,8 @@ app.use('/api/auth', authRoutes);
 app.get('/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
-
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', userRoutes);
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

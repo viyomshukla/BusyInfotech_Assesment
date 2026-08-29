@@ -7,6 +7,7 @@ import { validate } from '../middleware/validate.js';
 import { STATUSES } from '../models/Appointment.js';
 import * as service from '../services/appointment.service.js';
 import VisitNote from '../models/VisitNote.js';
+import { toCsv } from '../utils/csv.js';
 const noteSchema = z.object({ body: z.string().min(1).max(5000) });
 const router = Router();
 router.use(requireAuth);
@@ -18,7 +19,18 @@ const createSchema = z.object({
   startsAt: z.coerce.date(),
   durationMin: z.number().int().min(5).max(480),
 });
-
+const listSchema = z.object({
+  q: z.string().optional(),
+  providerId: objectId.optional(),
+  status: z.union([z.enum(STATUSES), z.array(z.enum(STATUSES))]).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  sort: z.enum(['date', 'status', 'provider']).default('date'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  includeArchived: z.coerce.boolean().default(false),
+});
 const updateSchema = z
   .object({
     startsAt: z.coerce.date().optional(),
@@ -37,7 +49,20 @@ const bookSchema = z
   .refine((v) => v.patientId || v.patientName, {
     message: 'Provide patientId or patientName',
   });
-
+const generateSchema = z.object({
+  providerId: objectId,
+  from: z.coerce.date(),
+  to: z.coerce.date(),
+  weekdays: z.array(z.number().int().min(0).max(6)).min(1),
+  blocks: z
+    .array(
+      z.object({
+        startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM'),
+        durationMin: z.number().int().min(5).max(480),
+      })
+    )
+    .min(1),
+});
 const statusSchema = z.object({
   to: z.enum(STATUSES),
   reason: z.string().optional(),
@@ -70,7 +95,16 @@ router.post('/:id/archive', async (req, res) => {
 router.post('/:id/restore', async (req, res) => {
   res.json(await service.setArchived(req.params.id, false, req.user));
 });
-
+router.get('/', async (req, res) => {
+  const parsed = listSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid query',
+      details: parsed.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+    });
+  }
+  res.json(await service.listAppointments(parsed.data, req.user));
+});
 router.get('/:id', async (req, res) => {
   const appt = await Appointment.findById(req.params.id);
   if (!appt) return res.status(404).json({ error: 'Appointment not found.' });
@@ -100,5 +134,29 @@ router.delete('/:id/care-team/:providerId', async (req, res) => {
 
 router.get('/mine/schedule', async (req, res) => {
   res.json(await service.listMySchedule(req.user, { includeArchived: req.query.archived === 'true' }));
+});
+router.post('/generate', validate(generateSchema), async (req, res) => {
+  res.status(201).json(await service.generateSlots(req.body, req.user));
+});
+
+router.get('/export/day', async (req, res) => {
+  const { date, providerId } = req.query;
+  if (!date) return res.status(400).json({ error: 'A date is required.' });
+
+  const rows = await service.getDaySchedule(date, providerId, req.user);
+
+  const csv = toCsv(rows, [
+    { label: 'Time', value: (r) => new Date(r.startsAt).toISOString().slice(11, 16) },
+    { label: 'Duration (min)', value: (r) => r.durationMin },
+    { label: 'Provider', value: (r) => r.providerName },
+    { label: 'Patient', value: (r) => r.patientName ?? '' },
+    { label: 'Status', value: (r) => r.status },
+    { label: 'Cancel reason', value: (r) => r.cancelReason ?? '' },
+  ]);
+
+  const day = new Date(date).toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="schedule-${day}.csv"`);
+  res.send('\uFEFF' + csv);
 });
 export default router;

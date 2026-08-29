@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #1b2333;
+  --color-muted: #5c6b84;
+  --color-paper: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-rule: #e4e  7ec;
+  --color-accent: #3d5a99;
+  --color-accent-soft: #eef2f9;
+
+  --color-status-open: #8894a8;
+  --color-status-requested: #b26a00;
+  --color-status-confirmed: #3d5a99;
+  --color-status-checkedin: #0f766e;
+  --color-status-completed: #4b6350;
+  --color-status-noshow: #b42318;
+  --color-status-cancelled: #98a2b3;
+
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

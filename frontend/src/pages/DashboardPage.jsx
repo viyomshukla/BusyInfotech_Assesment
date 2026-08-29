@@ -1,0 +1,208 @@
+import { useQuery } from '@tanstack/react-query';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
+import { format } from 'date-fns';
+import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { Panel, Loading, ErrorNote, EmptyState } from '../components/ui';
+import { STATUS_LABEL, STATUS_COLOR } from '../lib/format';
+
+export default function DashboardPage() {
+  const { user, isFrontDesk } = useAuth();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => api.get('/dashboard').then((r) => r.data),
+  });
+
+  if (isLoading) return <Loading label="Loading the dashboard…" />;
+  if (error) return <ErrorNote>{error.message}</ErrorNote>;
+
+  const { headline, byProvider, byStatus, noShowTrend } = data;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {isFrontDesk ? 'Clinic today' : `Your day, ${user.name}`}
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          {isFrontDesk
+            ? 'Across every provider.'
+            : 'Appointments where you are the scheduling or a supporting provider.'}
+        </p>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Appointments today" value={headline.appointmentsToday} />
+        <Stat
+          label="Checked in now"
+          value={headline.checkedInNow}
+          accent="var(--color-status-checkedin)"
+        />
+        <Stat
+          label="No-shows this week"
+          value={headline.noShowsThisWeek}
+          accent="var(--color-status-noshow)"
+        />
+        <Stat label="Confirmed upcoming" value={headline.upcomingConfirmed} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel title="By provider">
+          {byProvider.length === 0 ? (
+            <EmptyState title="Nothing to show" hint="No appointments have been created yet." />
+          ) : (
+            <ul className="divide-y divide-rule">
+              {byProvider.map((row) => (
+                <ProviderRow
+                  key={row.provider}
+                  provider={row.provider}
+                  count={row.count}
+                  max={Math.max(...byProvider.map((r) => r.count))}
+                />
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel title="By status">
+          {byStatus.length === 0 ? (
+            <EmptyState title="Nothing to show" />
+          ) : (
+            <div className="p-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={byStatus.map((r) => ({
+                    name: STATUS_LABEL[r.status] ?? r.status,
+                    count: r.count,
+                    fill: STATUS_COLOR[r.status],
+                  }))}
+                  margin={{ top: 4, right: 4, left: -18, bottom: 0 }}
+                >
+                  <CartesianGrid vertical={false} stroke="var(--color-rule)" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                    axisLine={{ stroke: 'var(--color-rule)' }}
+                    tickLine={false}
+                    interval={0}
+                    angle={-35}
+                    textAnchor="end"
+                    height={62}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'var(--color-accent-soft)' }}
+                    contentStyle={tooltipStyle}
+                  />
+                  <Bar dataKey="count" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <Panel
+        title="No-show rate, last eight weeks"
+        action={<span className="text-xs text-muted">Percent of attended-or-missed appointments</span>}
+      >
+        {noShowTrend.length === 0 ? (
+          <EmptyState
+            title="Not enough history yet"
+            hint="The chart fills in as appointments move past their scheduled time."
+          />
+        ) : (
+          <div className="p-5">
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart
+                data={noShowTrend.map((r) => ({
+                  week: format(new Date(r.weekStarting), 'd MMM'),
+                  rate: r.rate,
+                  noShows: r.noShows,
+                  total: r.total,
+                }))}
+                margin={{ top: 4, right: 8, left: -18, bottom: 0 }}
+              >
+                <CartesianGrid vertical={false} stroke="var(--color-rule)" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  axisLine={{ stroke: 'var(--color-rule)' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  unit="%"
+                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value, _name, item) => [
+                    `${value}%  (${item.payload.noShows} of ${item.payload.total})`,
+                    'No-show rate',
+                  ]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="rate"
+                  stroke="var(--color-status-noshow)"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: 'var(--color-status-noshow)' }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+const tooltipStyle = {
+  borderRadius: 6,
+  border: '1px solid var(--color-rule)',
+  fontSize: 12,
+  fontFamily: 'Archivo, sans-serif',
+  boxShadow: '0 4px 12px rgb(27 35 51 / 0.08)',
+};
+
+function Stat({ label, value, accent }) {
+  return (
+    <div className="rounded-lg border border-rule bg-surface px-5 py-4">
+      <p className="text-xs text-muted">{label}</p>
+      <p
+        className="tabular mt-1.5 text-3xl font-semibold leading-none"
+        style={accent && value > 0 ? { color: accent } : undefined}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ProviderRow({ provider, count, max }) {
+  return (
+    <li className="px-5 py-3">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="truncate text-sm">{provider}</span>
+        <span className="tabular shrink-0 text-sm font-medium">{count}</span>
+      </div>
+      <div className="mt-2 h-1 rounded-full bg-rule">
+        <div
+          className="h-1 rounded-full bg-accent"
+          style={{ width: `${max ? (count / max) * 100 : 0}%` }}
+        />
+      </div>
+    </li>
+  );
+}

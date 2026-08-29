@@ -46,7 +46,7 @@ appointmentSchema.index({ providerId: 1, startsAt: 1 });
 appointmentSchema.index({ status: 1, startsAt: 1 });
 appointmentSchema.index({ startsAt: 1 });
 appointmentSchema.index({ 'careTeam.providerId': 1 });
-appointmentSchema.index({ patientName: 1 });
+appointmentSchema.index({ patientName: 'text' });
 
 appointmentSchema.index(
   { providerId: 1, startsAt: 1 },
