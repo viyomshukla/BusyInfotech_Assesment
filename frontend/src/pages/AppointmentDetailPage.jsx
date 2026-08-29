@@ -67,16 +67,16 @@ export default function AppointmentDetailPage() {
         Appointments
       </Link>
 
-      <div className="rounded-lg border border-rule bg-surface">
+      <div className="overflow-hidden rounded-xl border border-rule bg-surface shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-5 p-5">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight">
+              <h1 className="text-[22px] font-semibold leading-tight tracking-tight">
                 {appt.patientName ?? 'Unbooked slot'}
               </h1>
               <StatusBadge status={appt.status} />
             </div>
-            <p className="tabular mt-1.5 text-sm text-muted">
+            <p className="tabular mt-2 text-sm text-muted">
               {time(appt.startsAt)}–{time(appt.endsAt)} · {fullDate(appt.startsAt)}
             </p>
             <p className="mt-0.5 text-sm text-muted">
@@ -189,13 +189,13 @@ export default function AppointmentDetailPage() {
           <Panel title="History" action={<span className="text-xs text-muted">Cannot be edited</span>}>
             <ol className="divide-y divide-rule">
               {timeline.map((event) => (
-                <li key={event._id} className="flex gap-4 px-5 py-3">
-                  <span className="tabular w-32 shrink-0 text-xs text-muted">
+                <li key={event._id} className="flex gap-4 px-5 py-3 transition-colors hover:bg-paper/60">
+                  <span className="tabular w-32 shrink-0 text-xs text-faint">
                     {dateTime(event.createdAt)}
                   </span>
                   <div className="min-w-0">
                     <p className="text-sm">{describe(event)}</p>
-                    <p className="text-xs text-muted">{event.actorName}</p>
+                    <p className="text-xs text-faint">{event.actorName}</p>
                   </div>
                 </li>
               ))}

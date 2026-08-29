@@ -5,7 +5,9 @@ import { Search, X, ArrowUp, ArrowDown } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useProviders } from '../hooks/useProviders';
-import { Button, Input, Select, StatusBadge, EmptyState, Loading, ErrorNote } from '../components/ui';
+import {
+  Button, Input, Select, StatusBadge, EmptyState, Loading, ErrorNote, PageHeader,
+} from '../components/ui';
 import { time, dayLabel, STATUS_LABEL } from '../lib/format';
 
 const STATUSES = Object.keys(STATUS_LABEL);
@@ -74,23 +76,22 @@ export default function AppointmentsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Appointments</h1>
-          <p className="mt-1 text-sm text-muted">
-            {isFrontDesk
-              ? 'Every provider, every status.'
-              : 'Where you are the scheduling or a supporting provider.'}
-          </p>
-        </div>
+      <PageHeader
+        title="Appointments"
+        subtitle={
+          isFrontDesk
+            ? 'Every provider, every status.'
+            : 'Where you are the scheduling or a supporting provider.'
+        }
+      >
         {data && (
-          <p className="tabular text-sm text-muted">
+          <span className="tabular rounded-full bg-surface px-3 py-1.5 text-xs text-muted shadow-card">
             {data.total} {data.total === 1 ? 'match' : 'matches'}
-          </p>
+          </span>
         )}
-      </header>
+      </PageHeader>
 
-      <div className="rounded-lg border border-rule bg-surface p-4">
+      <div className="rounded-xl border border-rule bg-surface p-4 shadow-card">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -182,11 +183,11 @@ export default function AppointmentsPage() {
 
       <ErrorNote>{error?.message}</ErrorNote>
 
-      <div className="overflow-hidden rounded-lg border border-rule bg-surface">
+      <div className="overflow-hidden rounded-xl border border-rule bg-surface shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-rule text-xs text-muted">
+              <tr className="border-b border-rule bg-paper/60 text-xs text-muted">
                 <SortHeader field="date" label="Date and time" query={query} onSort={toggleSort} />
                 <th className="px-4 py-2.5 font-medium">Patient</th>
                 <SortHeader field="provider" label="Provider" query={query} onSort={toggleSort} />
@@ -199,11 +200,11 @@ export default function AppointmentsPage() {
                 <tr
                   key={appt._id}
                   onClick={() => navigate(`/appointments/${appt._id}`)}
-                  className="cursor-pointer border-b border-rule last:border-0 hover:bg-accent-soft/50"
+                  className="cursor-pointer border-b border-rule-soft transition-colors last:border-0 hover:bg-accent-soft/60"
                 >
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <span className="tabular">{time(appt.startsAt)}</span>
-                    <span className="ml-2 text-xs text-muted">{dayLabel(appt.startsAt)}</span>
+                  <td className="whitespace-nowrap px-4 py-3.5">
+                    <span className="tabular font-medium">{time(appt.startsAt)}</span>
+                    <span className="ml-2 text-xs text-faint">{dayLabel(appt.startsAt)}</span>
                   </td>
                   <td className="px-4 py-3">
                     {appt.patientName ?? <span className="text-muted">Unbooked</span>}
@@ -213,7 +214,7 @@ export default function AppointmentsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted">{appt.providerName}</td>
+                  <td className="px-4 py-3.5 text-muted">{appt.providerName}</td>
                   <td className="px-4 py-3"><StatusBadge status={appt.status} /></td>
                   <td className="tabular px-4 py-3 text-right text-muted">{appt.durationMin}m</td>
                 </tr>

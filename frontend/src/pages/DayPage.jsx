@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useProviders } from '../hooks/useProviders';
 import {
-  Button, Panel, Modal, Field, Input, Select, StatusBadge,
+  Button, Panel, PageHeader, Modal, Field, Input, Select, StatusBadge,
   EmptyState, Loading, ErrorNote,
 } from '../components/ui';
 import { time, fullDate, toInputDate, STATUS_COLOR } from '../lib/format';
@@ -73,35 +73,43 @@ const { data: providers = [], error: providerError } = useProviders();
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Day sheet</h1>
-          <p className="mt-1 text-sm text-muted">{fullDate(parseISO(date))}</p>
+      <PageHeader title="Day sheet" subtitle={fullDate(parseISO(date))}>
+        <div className="flex items-center rounded-md border border-rule bg-surface shadow-card">
+          <button
+            onClick={() => shift(-1)}
+            aria-label="Previous day"
+            className="rounded-l-md px-2 py-2 text-muted transition-colors hover:bg-paper hover:text-ink"
+          >
+            <ChevronLeft size={15} strokeWidth={2} />
+          </button>
+          <div className="w-36 border-x border-rule">
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-0 rounded-none border-0 shadow-none focus:ring-0"
+              aria-label="Date"
+            />
+          </div>
+          <button
+            onClick={() => shift(1)}
+            aria-label="Next day"
+            className="rounded-r-md px-2 py-2 text-muted transition-colors hover:bg-paper hover:text-ink"
+          >
+            <ChevronRight size={15} strokeWidth={2} />
+          </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => shift(-1)} aria-label="Previous day">
-            <ChevronLeft size={15} strokeWidth={2} />
-          </Button>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-0 w-40"
-            aria-label="Date"
-          />
-          <Button variant="secondary" size="sm" onClick={() => shift(1)} aria-label="Next day">
-            <ChevronRight size={15} strokeWidth={2} />
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setDate(toInputDate())}>
-            Today
-          </Button>
+        <Button variant="secondary" size="sm" onClick={() => setDate(toInputDate())}>
+          Today
+        </Button>
 
-          {isFrontDesk && (
+        {isFrontDesk && (
+          <div className="w-44">
             <Select
               value={providerId}
               onChange={(e) => setProviderId(e.target.value)}
-              className="mt-0 w-44"
+              className="mt-0"
               aria-label="Filter by provider"
             >
               <option value="">All providers</option>
@@ -109,16 +117,16 @@ const { data: providers = [], error: providerError } = useProviders();
                 <option key={p._id} value={p._id}>{p.name}</option>
               ))}
             </Select>
-          )}
+          </div>
+        )}
 
-          <Button variant="secondary" size="sm" onClick={exportCsv}>
-            <Download size={14} strokeWidth={1.75} /> CSV
-          </Button>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus size={14} strokeWidth={2} /> New slot
-          </Button>
-        </div>
-      </header>
+        <Button variant="secondary" size="sm" onClick={exportCsv}>
+          <Download size={14} strokeWidth={1.75} /> CSV
+        </Button>
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Plus size={14} strokeWidth={2} /> New slot
+        </Button>
+      </PageHeader>
 
       <ErrorNote>{error}</ErrorNote>
 
@@ -138,7 +146,7 @@ const { data: providers = [], error: providerError } = useProviders();
                 {hours.map((h) => (
                   <div
                     key={h}
-                    className="tabular relative text-xs text-muted"
+                    className="tabular relative text-xs text-faint"
                     style={{ height: 60 * PX_PER_MIN }}
                   >
                     <span className="absolute -top-1.5">{String(h).padStart(2, '0')}:00</span>
@@ -148,7 +156,7 @@ const { data: providers = [], error: providerError } = useProviders();
 
               {columns.map((provider) => (
                 <div key={provider._id} className="w-56 shrink-0 border-l border-rule">
-                  <div className="h-8 truncate px-3 text-sm font-medium">{provider.name}</div>
+                  <div className="h-8 truncate px-3 text-sm font-medium text-ink">{provider.name}</div>
                   <div
                     className="relative"
                     style={{ height: (END_HOUR - START_HOUR + 1) * 60 * PX_PER_MIN }}
@@ -195,11 +203,11 @@ function SlotBlock({ appt, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="absolute inset-x-1 overflow-hidden rounded-r border border-rule bg-surface
-                 px-2 py-1 text-left transition-shadow hover:shadow-sm"
+      className="absolute inset-x-1 overflow-hidden rounded-md border border-rule bg-surface
+                 px-2 py-1 text-left shadow-card transition-shadow hover:shadow-raise"
       style={{ top, height, borderLeft: `3px solid ${STATUS_COLOR[appt.status]}` }}
     >
-      <p className="tabular truncate text-[11px] text-muted">{time(appt.startsAt)}</p>
+      <p className="tabular truncate text-[11px] text-faint">{time(appt.startsAt)}</p>
       <p className="truncate text-xs font-medium">
         {appt.patientName ?? <span className="font-normal text-muted">Open</span>}
       </p>

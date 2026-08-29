@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { LayoutDashboard, CalendarDays, ListChecks, CalendarPlus, Bell, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard, CalendarDays, ListChecks, CalendarPlus, Bell, Users, LogOut,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAlerts } from '../hooks/useAlerts';
 
@@ -8,16 +10,18 @@ const LINKS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/day', label: 'Day sheet', icon: CalendarDays },
   { to: '/appointments', label: 'Appointments', icon: ListChecks },
+  { to: '/alerts', label: 'Alerts', icon: Bell, alerts: true },
   { to: '/availability', label: 'Availability', icon: CalendarPlus, frontDeskOnly: true },
+  { to: '/staff', label: 'Staff', icon: Users, frontDeskOnly: true },
 ];
 
 export function Layout() {
   const { user, isFrontDesk, logout } = useAuth();
-  const { data: alerts } = useAlerts();
+  const { data } = useAlerts();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const count = alerts?.count ?? 0;
+  const count = data?.count ?? 0;
   const links = LINKS.filter((l) => !l.frontDeskOnly || isFrontDesk);
 
   async function signOut() {
@@ -28,66 +32,137 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-rule bg-surface">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3">
-          <NavLink to="/" className="shrink-0">
-            <span className="tabular text-xs uppercase tracking-[0.18em] text-muted">
-              Riverside Clinic
-            </span>
-          </NavLink>
+      <aside
+        className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-rule
+                   bg-surface lg:flex"
+      >
+        <Brand />
 
-          <nav className="flex flex-1 flex-wrap items-center gap-1">
-            {links.map((link) => (
-              <TabLink key={link.to} {...link} />
-            ))}
-            <TabLink to="/alerts" label="Alerts" icon={Bell} badge={count} />
-          </nav>
+        <nav className="flex-1 space-y-0.5 px-3 py-4">
+          {links.map((link) => (
+            <NavItem key={link.to} {...link} count={count} />
+          ))}
+        </nav>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-medium leading-tight">{user.name}</p>
-              <p className="text-xs text-muted">
-                {isFrontDesk ? 'Front desk' : 'Provider'}
-              </p>
+        <div className="border-t border-rule-soft p-3">
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <Avatar name={user.name} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium leading-tight">{user.name}</p>
+              <p className="text-xs text-faint">{isFrontDesk ? 'Front desk' : 'Provider'}</p>
             </div>
-            <button
-              onClick={signOut}
-              className="inline-flex items-center gap-1.5 rounded border border-rule px-2.5 py-1.5
-                         text-xs font-medium text-muted transition-colors
-                         hover:border-accent hover:text-accent"
-            >
-              <LogOut size={14} strokeWidth={1.75} />
-              Sign out
-            </button>
           </div>
+          <button
+            onClick={signOut}
+            className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm
+                       text-muted transition-colors hover:bg-paper hover:text-ink"
+          >
+            <LogOut size={15} strokeWidth={1.75} />
+            Sign out
+          </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="px-6 py-7">
-        <Outlet />
-      </main>
+      <div className="lg:pl-60">
+        <header className="sticky top-0 z-20 border-b border-rule bg-surface/90 backdrop-blur lg:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <Brand compact />
+            <div className="flex items-center gap-2">
+              <Avatar name={user.name} />
+              <button
+                onClick={signOut}
+                className="rounded-md p-2 text-muted transition-colors hover:bg-paper hover:text-ink"
+                aria-label="Sign out"
+              >
+                <LogOut size={15} strokeWidth={1.75} />
+              </button>
+            </div>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
+            {links.map((link) => (
+              <NavItem key={link.to} {...link} count={count} compact />
+            ))}
+          </nav>
+        </header>
+
+        <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
 
-function TabLink({ to, label, icon: Icon, end = false, badge = 0 }) {
+function Brand({ compact = false }) {
+  return (
+    <NavLink
+      to="/"
+      className={`flex items-center gap-2.5 ${compact ? '' : 'border-b border-rule-soft px-5 py-4'}`}
+    >
+      <span
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent
+                   text-sm font-semibold text-white shadow-card"
+        aria-hidden
+      >
+        R
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold leading-tight tracking-tight">
+          Riverside Clinic
+        </span>
+        <span className="tabular block text-[10px] uppercase tracking-[0.16em] text-faint">
+          Scheduling
+        </span>
+      </span>
+    </NavLink>
+  );
+}
+
+function Avatar({ name }) {
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+
+  return (
+    <span
+      aria-hidden
+      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft
+                 text-xs font-semibold text-accent"
+    >
+      {initials}
+    </span>
+  );
+}
+
+function NavItem({ to, label, icon: Icon, end = false, alerts = false, count = 0, compact = false }) {
+  const badge = alerts ? count : 0;
+
   return (
     <NavLink
       to={to}
       end={end}
       className={({ isActive }) =>
-        `inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm transition-colors ${
-          isActive ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:text-accent'
+        `group flex items-center gap-2.5 rounded-md text-sm transition-colors ${
+          compact ? 'shrink-0 px-2.5 py-1.5' : 'px-3 py-2'
+        } ${
+          isActive
+            ? 'bg-accent-soft font-medium text-accent'
+            : 'text-muted hover:bg-paper hover:text-ink'
         }`
       }
     >
-      <Icon size={15} strokeWidth={1.75} />
-      {label}
+      <Icon size={16} strokeWidth={1.75} className="shrink-0" />
+      <span className="whitespace-nowrap">{label}</span>
       {badge > 0 && (
         <span
           aria-label={`${badge} unconfirmed`}
-          className="tabular ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full
-                     bg-status-noshow px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+          className="tabular ml-auto inline-flex min-w-[1.25rem] items-center justify-center
+                     rounded-full bg-status-noshow px-1.5 py-0.5 text-[10px] font-semibold
+                     leading-none text-white"
         >
           {badge}
         </span>

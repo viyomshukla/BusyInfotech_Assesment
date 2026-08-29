@@ -19,12 +19,34 @@ const createSchema = z.object({
   startsAt: z.coerce.date(),
   durationMin: z.number().int().min(5).max(480),
 });
+// A plain YYYY-MM-DD means the whole local day, not the instant at midnight UTC:
+// "to=2026-08-29" has to include everything that starts on the 29th.
+const DATE_ONLY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+const dayBoundary = (edge) =>
+  z
+    .union([z.string(), z.date()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === '') return undefined;
+      if (typeof value === 'string' && DATE_ONLY.test(value)) {
+        const [y, m, d] = value.split('-').map(Number);
+        return edge === 'end'
+          ? new Date(y, m - 1, d, 23, 59, 59, 999)
+          : new Date(y, m - 1, d, 0, 0, 0, 0);
+      }
+      return new Date(value);
+    })
+    .refine((value) => value === undefined || !Number.isNaN(value.getTime()), {
+      message: 'Provide a valid date.',
+    });
+
 const listSchema = z.object({
   q: z.string().optional(),
   providerId: objectId.optional(),
   status: z.union([z.enum(STATUSES), z.array(z.enum(STATUSES))]).optional(),
-  from: z.coerce.date().optional(),
-  to: z.coerce.date().optional(),
+  from: dayBoundary('start'),
+  to: dayBoundary('end'),
   sort: z.enum(['date', 'status', 'provider']).default('date'),
   dir: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),

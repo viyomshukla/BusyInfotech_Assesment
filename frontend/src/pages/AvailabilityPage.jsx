@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, CalendarPlus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useProviders } from '../hooks/useProviders';
-import { Button, Panel, Field, Input, Select, ErrorNote } from '../components/ui';
+import { Button, Panel, PageHeader, Field, Input, Select, ErrorNote } from '../components/ui';
 import { time, dateTime, toInputDate } from '../lib/format';
 
 const DAYS = [
@@ -60,12 +60,10 @@ export default function AvailabilityPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Availability</h1>
-        <p className="mt-1 text-sm text-muted">
-          Repeat a weekly pattern across a date range. Slots that clash with existing bookings are skipped.
-        </p>
-      </header>
+      <PageHeader
+        title="Availability"
+        subtitle="Repeat a weekly pattern across a date range. Slots that clash with an existing booking are skipped."
+      />
 
       <Panel title="Generate slots">
         <form onSubmit={submit} className="space-y-5 p-5">

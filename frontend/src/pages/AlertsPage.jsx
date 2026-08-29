@@ -5,7 +5,7 @@ import { AlertTriangle, BellOff, Check, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAlerts } from '../hooks/useAlerts';
 import { useAuth } from '../context/AuthContext';
-import { Button, Panel, EmptyState, Loading, ErrorNote } from '../components/ui';
+import { Button, Panel, PageHeader, EmptyState, Loading, ErrorNote } from '../components/ui';
 import { time, dayLabel, untilNow } from '../lib/format';
 
 export default function AlertsPage() {
@@ -36,21 +36,20 @@ export default function AlertsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Unconfirmed alerts</h1>
-          <p className="mt-1 text-sm text-muted">
-            {isFrontDesk
-              ? 'Requested appointments starting within 24 hours that nobody has confirmed.'
-              : 'Requested appointments on your schedule within the next 24 hours.'}
-          </p>
-        </div>
+      <PageHeader
+        title="Unconfirmed alerts"
+        subtitle={
+          isFrontDesk
+            ? 'Requested appointments starting within 24 hours that nobody has confirmed.'
+            : 'Requested appointments on your schedule within the next 24 hours.'
+        }
+      >
         {data && (
-          <p className="tabular text-sm text-muted">
+          <span className="tabular rounded-full bg-surface px-3 py-1.5 text-xs text-muted shadow-card">
             {data.count} {data.count === 1 ? 'alert' : 'alerts'}
-          </p>
+          </span>
         )}
-      </header>
+      </PageHeader>
 
       <ErrorNote>{actionError}</ErrorNote>
 
@@ -61,6 +60,7 @@ export default function AlertsPage() {
       ) : items.length === 0 ? (
         <Panel>
           <EmptyState
+            icon={BellOff}
             title="Nothing needs chasing"
             hint="Every appointment in the next 24 hours is either confirmed or already dismissed."
           />

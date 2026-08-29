@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { Button, Field, Input, ErrorNote } from '../components/ui';
 
 const DEMO = [
-  { label: 'Front desk', email: 'desk@clinic.test' },
-  { label: 'Dr Patel', email: 'drpatel@clinic.test' },
-  { label: 'Dr Singh', email: 'drsingh@clinic.test' },
-  { label: 'Dr Iyer', email: 'driyer@clinic.test' },
+  { label: 'Front desk', email: 'desk@clinic.test', icon: ShieldCheck },
+  { label: 'Dr Patel', email: 'drpatel@clinic.test', icon: Stethoscope },
+  { label: 'Dr Singh', email: 'drsingh@clinic.test', icon: Stethoscope },
+  { label: 'Dr Iyer', email: 'driyer@clinic.test', icon: Stethoscope },
 ];
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);  const { login } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -38,98 +42,122 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="mx-auto flex min-h-screen max-w-5xl items-center px-6">
-        <div className="grid w-full gap-16 md:grid-cols-[1fr_360px]">
-          <div className="hidden self-center md:block">
-            <p className="tabular text-xs uppercase tracking-[0.18em] text-muted">
-              Riverside Clinic
-            </p>
-            <h1 className="mt-3 max-w-sm text-4xl font-bold leading-[1.1] tracking-tight">
-              The day sheet, without the paper.
-            </h1>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-              Availability, bookings and visit notes in one place, so nobody has to
-              count boxes on a printout to know how full tomorrow is.
-            </p>
+    <div className="min-h-screen bg-paper lg:grid lg:grid-cols-[1.1fr_1fr]">
+      <section className="relative hidden overflow-hidden bg-accent-deep px-14 py-16 text-white lg:flex lg:flex-col lg:justify-between">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -top-24 size-[26rem] rounded-full
+                     bg-white/5 blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-32 -left-20 size-[22rem] rounded-full
+                     bg-white/5 blur-2xl"
+        />
 
-            <div className="mt-10 border-t border-rule pt-5">
-              <p className="text-xs font-medium text-muted">Demo accounts</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {DEMO.map((d) => (
-                  <button
-                    key={d.email}
-                    type="button"
-                    onClick={() => fillDemo(d.email)}
-                    className="rounded border border-rule bg-surface px-3 py-1.5 text-xs font-medium
-                               text-ink transition-colors hover:border-accent hover:text-accent"
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="relative flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-white/15 text-sm font-semibold">
+            R
+          </span>
+          <div>
+            <p className="text-sm font-semibold leading-tight">Riverside Clinic</p>
+            <p className="tabular text-[10px] uppercase tracking-[0.16em] text-white/55">
+              Scheduling
+            </p>
+          </div>
+        </div>
+
+        <div className="relative max-w-md">
+          <h1 className="text-[40px] font-bold leading-[1.08] tracking-tight">
+            The day sheet, without the paper.
+          </h1>
+          <p className="mt-5 text-[15px] leading-relaxed text-white/70">
+            Availability, bookings, visit notes and an audit trail in one place, so nobody
+            has to count boxes on a printout to know how full tomorrow is.
+          </p>
+
+          <ul className="mt-10 space-y-3 text-sm text-white/70">
+            {[
+              'Recurring availability generated in one action',
+              'Every status change kept on a record nobody can rewrite',
+              'Unconfirmed appointments surfaced before they go quiet',
+            ].map((line) => (
+              <li key={line} className="flex gap-3">
+                <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-white/40" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-xs text-white/40">Staff access only.</p>
+      </section>
+
+      <section className="flex min-h-screen items-center justify-center px-5 py-12 lg:min-h-0">
+        <div className="w-full max-w-sm">
+          <div className="mb-7 flex items-center gap-2.5 lg:hidden">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white">
+              R
+            </span>
+            <span className="text-sm font-semibold">Riverside Clinic</span>
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="self-center rounded-lg border border-rule bg-surface p-7 shadow-sm"
-          >
-            <h2 className="text-lg font-semibold">Sign in</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
+          <p className="mt-1.5 text-sm text-muted">Use your clinic email address.</p>
 
-            <label className="mt-6 block text-xs font-medium text-muted" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-              className="mt-1.5 w-full rounded border border-rule px-3 py-2 text-sm
-                         focus:border-accent focus:outline-none"
-            />
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+            <Field label="Email">
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="username"
+                placeholder="you@clinic.test"
+              />
+            </Field>
 
-            <label className="mt-4 block text-xs font-medium text-muted" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="mt-1.5 w-full rounded border border-rule px-3 py-2 text-sm
-                         focus:border-accent focus:outline-none"
-            />
+            <Field label="Password">
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+            </Field>
 
-            {error && (
-              <p
-                role="alert"
-                className="mt-4 rounded border border-status-noshow/25 bg-status-noshow/5
-                           px-3 py-2 text-sm text-status-noshow"
-              >
-                {error}
-              </p>
-            )}
+            <ErrorNote>{error}</ErrorNote>
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="mt-6 w-full rounded bg-accent py-2.5 text-sm font-medium text-white
-                         transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={busy} className="w-full">
               {busy ? 'Signing in…' : 'Sign in'}
-            </button>
-
-            <p className="mt-4 text-center text-xs text-muted md:hidden">
-              Demo: desk@clinic.test / password123
-            </p>
+            </Button>
           </form>
+
+          <div className="mt-9 border-t border-rule pt-5">
+            <p className="text-xs font-medium text-muted">Demo accounts</p>
+            <p className="mt-1 text-xs text-faint">
+              Every demo account uses the password <span className="tabular">password123</span>.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {DEMO.map((d) => (
+                <button
+                  key={d.email}
+                  type="button"
+                  onClick={() => fillDemo(d.email)}
+                  className="flex items-center gap-2 rounded-md border border-rule bg-surface px-3 py-2
+                             text-left text-xs font-medium text-ink shadow-card transition-colors
+                             hover:border-accent hover:text-accent"
+                >
+                  <d.icon size={14} strokeWidth={1.75} className="shrink-0 text-faint" />
+                  <span className="truncate">{d.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

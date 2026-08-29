@@ -3,9 +3,10 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { format } from 'date-fns';
+import { CalendarCheck, UserCheck, UserX, CalendarClock } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Panel, Loading, ErrorNote, EmptyState } from '../components/ui';
+import { Panel, PageHeader, Loading, ErrorNote, EmptyState } from '../components/ui';
 import { STATUS_LABEL, STATUS_COLOR } from '../lib/format';
 
 export default function DashboardPage() {
@@ -16,37 +17,58 @@ export default function DashboardPage() {
     queryFn: () => api.get('/dashboard').then((r) => r.data),
   });
 
-  if (isLoading) return <Loading label="Loading the dashboard…" />;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <Panel><Loading label="Loading the dashboard…" rows={2} /></Panel>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <Panel key={i}><Loading rows={2} /></Panel>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (error) return <ErrorNote>{error.message}</ErrorNote>;
 
   const { headline, byProvider, byStatus, noShowTrend } = data;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">
-          {isFrontDesk ? 'Clinic today' : `Your day, ${user.name}`}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          {isFrontDesk
+      <PageHeader
+        title={isFrontDesk ? 'Clinic today' : `Your day, ${user.name}`}
+        subtitle={
+          isFrontDesk
             ? 'Across every provider.'
-            : 'Appointments where you are the scheduling or a supporting provider.'}
-        </p>
-      </header>
+            : 'Appointments where you are the scheduling or a supporting provider.'
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Appointments today" value={headline.appointmentsToday} />
+        <Stat
+          label="Appointments today"
+          value={headline.appointmentsToday}
+          icon={CalendarCheck}
+          accent="var(--color-accent)"
+        />
         <Stat
           label="Checked in now"
           value={headline.checkedInNow}
+          icon={UserCheck}
           accent="var(--color-status-checkedin)"
         />
         <Stat
           label="No-shows this week"
           value={headline.noShowsThisWeek}
+          icon={UserX}
           accent="var(--color-status-noshow)"
         />
-        <Stat label="Confirmed upcoming" value={headline.upcomingConfirmed} />
+        <Stat
+          label="Confirmed upcoming"
+          value={headline.upcomingConfirmed}
+          icon={CalendarClock}
+          accent="var(--color-status-confirmed)"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -169,20 +191,35 @@ export default function DashboardPage() {
 }
 
 const tooltipStyle = {
-  borderRadius: 6,
+  borderRadius: 8,
   border: '1px solid var(--color-rule)',
   fontSize: 12,
   fontFamily: 'Archivo, sans-serif',
   boxShadow: '0 4px 12px rgb(27 35 51 / 0.08)',
 };
 
-function Stat({ label, value, accent }) {
+function Stat({ label, value, accent, icon: Icon }) {
+  const live = value > 0;
+
   return (
-    <div className="rounded-lg border border-rule bg-surface px-5 py-4">
-      <p className="text-xs text-muted">{label}</p>
+    <div
+      className="group rounded-xl border border-rule bg-surface px-5 py-4 shadow-card
+                 transition-shadow hover:shadow-raise"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs leading-snug text-muted">{label}</p>
+        {Icon && (
+          <span
+            className="tint flex size-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ '--tint-color': accent }}
+          >
+            <Icon size={14} strokeWidth={2} />
+          </span>
+        )}
+      </div>
       <p
-        className="tabular mt-1.5 text-3xl font-semibold leading-none"
-        style={accent && value > 0 ? { color: accent } : undefined}
+        className="tabular mt-3 text-[32px] font-semibold leading-none tracking-tight"
+        style={live ? { color: accent } : { color: 'var(--color-faint)' }}
       >
         {value}
       </p>
@@ -197,9 +234,9 @@ function ProviderRow({ provider, count, max }) {
         <span className="truncate text-sm">{provider}</span>
         <span className="tabular shrink-0 text-sm font-medium">{count}</span>
       </div>
-      <div className="mt-2 h-1 rounded-full bg-rule">
+      <div className="mt-2 h-1.5 rounded-full bg-rule-soft">
         <div
-          className="h-1 rounded-full bg-accent"
+          className="h-1.5 rounded-full bg-accent transition-[width] duration-500"
           style={{ width: `${max ? (count / max) * 100 : 0}%` }}
         />
       </div>

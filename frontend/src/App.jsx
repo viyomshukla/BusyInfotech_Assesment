@@ -10,6 +10,7 @@ import AppointmentDetailPage from './pages/AppointmentDetailPage';
 import DayPage from './pages/DayPage';
 import AvailabilityPage from './pages/AvailabilityPage';
 import AlertsPage from './pages/AlertsPage';
+import StaffPage from './pages/StaffPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,10 @@ export default function App() {
               <Route
                 path="/availability"
                 element={<ProtectedRoute frontDeskOnly><AvailabilityPage /></ProtectedRoute>}
+              />
+              <Route
+                path="/staff"
+                element={<ProtectedRoute frontDeskOnly><StaffPage /></ProtectedRoute>}
               />
             </Route>
 
