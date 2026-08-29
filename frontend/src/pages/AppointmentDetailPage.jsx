@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Archive, ArchiveRestore } from 'lucide-react';
+import { ArrowLeft, Plus, X, Archive, ArchiveRestore, UserPlus, Pencil } from 'lucide-react';
 import { useAppointment, useAppointmentMutation } from '../hooks/useAppointment';
 import { useProviders } from '../hooks/useProviders';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +10,7 @@ import {
   Button, Panel, StatusBadge, Modal, Field, Textarea, Select, Input,
   Loading, ErrorNote, EmptyState,
 } from '../components/ui';
-import { time, fullDate, dateTime, STATUS_LABEL } from '../lib/format';
+import { time, fullDate, dateTime, toInputDate, STATUS_LABEL } from '../lib/format';
 
 const NEXT_STEPS = {
   REQUESTED: [{ to: 'CONFIRMED', label: 'Confirm' }],
@@ -29,6 +29,8 @@ export default function AppointmentDetailPage() {
 
   const [error, setError] = useState(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [supportId, setSupportId] = useState('');
@@ -95,6 +97,16 @@ export default function AppointmentDetailPage() {
                   {step.label}
                 </Button>
               ))}
+              {appt.status === 'OPEN' && (
+                <>
+                  <Button size="sm" onClick={() => setBookOpen(true)}>
+                    <UserPlus size={14} strokeWidth={2} /> Book patient
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+                    <Pencil size={14} strokeWidth={1.75} /> Edit slot
+                  </Button>
+                </>
+              )}
               {canCancel && (
                 <Button variant="secondary" size="sm" onClick={() => setCancelOpen(true)}>
                   Cancel
@@ -270,6 +282,22 @@ export default function AppointmentDetailPage() {
         </Panel>
       </div>
 
+      <BookModal
+        open={bookOpen}
+        onClose={() => setBookOpen(false)}
+        onSubmit={(body, done) => run({ path: '/book', body }, done)}
+        busy={mutate.isPending}
+      />
+
+      {editOpen && (
+        <EditSlotModal
+          appt={appt}
+          onClose={() => setEditOpen(false)}
+          onSubmit={(body, done) => run({ path: '', method: 'patch', body }, done)}
+          busy={mutate.isPending}
+        />
+      )}
+
       <Modal open={cancelOpen} title="Cancel this appointment" onClose={() => setCancelOpen(false)}>
         <form
           className="p-5"
@@ -301,6 +329,108 @@ export default function AppointmentDetailPage() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+function BookModal({ open, onClose, onSubmit, busy }) {
+  const [patientName, setPatientName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  function close() {
+    setPatientName('');
+    setPhone('');
+    onClose();
+  }
+
+  return (
+    <Modal open={open} title="Book this slot" onClose={close}>
+      <form
+        className="space-y-4 p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit({ patientName: patientName.trim(), phone: phone.trim() || undefined }, close);
+        }}
+      >
+        <Field label="Patient name">
+          <Input
+            value={patientName}
+            onChange={(e) => setPatientName(e.target.value)}
+            placeholder="Jane Doe"
+            required
+          />
+        </Field>
+        <Field label="Phone" hint="Optional — kept on the patient record.">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07700 900000" />
+        </Field>
+        <p className="text-xs text-muted">
+          Booking moves this slot to Requested. Confirm it here or from Alerts.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={close}>Cancel</Button>
+          <Button type="submit" size="sm" disabled={busy || !patientName.trim()}>
+            {busy ? 'Booking…' : 'Book slot'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditSlotModal({ appt, onClose, onSubmit, busy }) {
+  const [date, setDate] = useState(toInputDate(appt.startsAt));
+  const [startTime, setStartTime] = useState(time(appt.startsAt));
+  const [durationMin, setDurationMin] = useState(appt.durationMin);
+
+  return (
+    <Modal open title="Edit slot" onClose={onClose}>
+      <form
+        className="space-y-4 p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(
+            {
+              startsAt: new Date(date + 'T' + startTime + ':00').toISOString(),
+              durationMin: Number(durationMin),
+            },
+            onClose
+          );
+        }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Date">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          </Field>
+          <Field label="Start time">
+            <Input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+            />
+          </Field>
+        </div>
+        <Field label="Duration (minutes)">
+          <Input
+            type="number"
+            min={5}
+            max={480}
+            step={5}
+            value={durationMin}
+            onChange={(e) => setDurationMin(e.target.value)}
+            required
+          />
+        </Field>
+        <p className="text-xs text-muted">
+          Only unbooked slots can be moved. An overlap with this provider's other slots is rejected.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+          <Button type="submit" size="sm" disabled={busy}>
+            {busy ? 'Saving…' : 'Save slot'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

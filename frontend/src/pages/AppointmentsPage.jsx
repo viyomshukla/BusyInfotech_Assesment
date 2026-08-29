@@ -25,6 +25,7 @@ export default function AppointmentsPage() {
     status: params.get('status') ?? '',
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
+    archived: params.get('archived') === 'true',
     sort: params.get('sort') ?? 'date',
     dir: params.get('dir') ?? 'asc',
     page: Number(params.get('page') ?? 1),
@@ -57,13 +58,19 @@ export default function AppointmentsPage() {
     queryKey: ['appointments', query],
     queryFn: () =>
       api
-        .get('/appointments', { params: { ...cleaned(query), limit: LIMIT } })
+        .get('/appointments', {
+          params: {
+            ...cleaned({ ...query, archived: undefined }),
+            ...(query.archived ? { includeArchived: 'true' } : {}),
+            limit: LIMIT,
+          },
+        })
         .then((r) => r.data),
     placeholderData: keepPreviousData,
   });
 
   const activeFilters =
-    query.q || query.providerId || query.status || query.from || query.to;
+    query.q || query.providerId || query.status || query.from || query.to || query.archived;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -152,6 +159,16 @@ export default function AppointmentsPage() {
           />
         </div>
 
+        <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={query.archived}
+            onChange={(e) => setQuery({ archived: e.target.checked ? 'true' : '' })}
+            className="size-3.5 accent-[var(--color-accent)]"
+          />
+          Include archived slots
+        </label>
+
         {activeFilters && (
           <button
             onClick={clearAll}
@@ -190,6 +207,11 @@ export default function AppointmentsPage() {
                   </td>
                   <td className="px-4 py-3">
                     {appt.patientName ?? <span className="text-muted">Unbooked</span>}
+                    {appt.archivedAt && (
+                      <span className="ml-2 rounded bg-paper px-1.5 py-0.5 text-[10px] text-muted">
+                        archived
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted">{appt.providerName}</td>
                   <td className="px-4 py-3"><StatusBadge status={appt.status} /></td>

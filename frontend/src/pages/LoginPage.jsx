@@ -6,6 +6,7 @@ const DEMO = [
   { label: 'Front desk', email: 'desk@clinic.test' },
   { label: 'Dr Patel', email: 'drpatel@clinic.test' },
   { label: 'Dr Singh', email: 'drsingh@clinic.test' },
+  { label: 'Dr Iyer', email: 'driyer@clinic.test' },
 ];
 
 export default function LoginPage() {

@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, BellOff, Check, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAlerts } from '../hooks/useAlerts';
 import { useAuth } from '../context/AuthContext';
 import { Button, Panel, EmptyState, Loading, ErrorNote } from '../components/ui';
 import { time, dayLabel, untilNow } from '../lib/format';
-
-const REFRESH_MS = 60_000;
 
 export default function AlertsPage() {
   const { isFrontDesk } = useAuth();
@@ -15,11 +14,7 @@ export default function AlertsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['alerts'],
-    queryFn: () => api.get('/dashboard/alerts').then((r) => r.data),
-    refetchInterval: REFRESH_MS,
-  });
+  const { data, isLoading, error } = useAlerts();
 
   const act = useMutation({
     mutationFn: ({ id, action }) =>

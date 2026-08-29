@@ -29,7 +29,10 @@ const listSchema = z.object({
   dir: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  includeArchived: z.coerce.boolean().default(false),
+  includeArchived: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 const updateSchema = z
   .object({
@@ -108,6 +111,16 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const appt = await Appointment.findById(req.params.id);
   if (!appt) return res.status(404).json({ error: 'Appointment not found.' });
+  if (req.user.role === 'PROVIDER') {
+    const mine =
+      appt.providerId.toString() === req.user._id.toString() ||
+      appt.careTeam.some((m) => m.providerId.toString() === req.user._id.toString());
+    if (!mine) {
+      return res
+        .status(403)
+        .json({ error: 'You can only open appointments on your own schedule.' });
+    }
+  }
 
   const [timeline, notes] = await Promise.all([
     AppointmentEvent.find({ appointmentId: appt._id }).sort({ createdAt: 1 }),
