@@ -14,10 +14,34 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
+// CLIENT_ORIGIN may list several origins, comma separated, so one value covers
+// local development and the deployed frontend. A trailing slash is tolerated
+// because an Origin header never carries one.
+const trimSlash = (value) => (value.endsWith('/') ? value.slice(0, -1) : value);
+
+const allowedOrigins = (process.env.CLIENT_ORIGIN ?? '')
+  .split(',')
+  .map((entry) => trimSlash(entry.trim()))
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // No Origin header at all: same-origin navigations, curl, health checks.
+      if (!origin) return callback(null, true);
+      callback(null, allowedOrigins.includes(trimSlash(origin)));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.get("/",(req,res)=> {
+  res.json({
+    msg:"Hello world"
+  })
+})
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/auth', authRoutes);
 app.get('/health', (req, res) => {
