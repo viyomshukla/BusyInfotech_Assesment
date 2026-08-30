@@ -9,6 +9,7 @@
   },
   "scripts": {
     "seed": "node src/scripts/seed.js",
+    "reindex": "node src/scripts/reindex.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js"

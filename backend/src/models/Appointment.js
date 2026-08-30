@@ -48,11 +48,19 @@ appointmentSchema.index({ startsAt: 1 });
 appointmentSchema.index({ 'careTeam.providerId': 1 });
 appointmentSchema.index({ patientName: 'text' });
 
+// Guards against two slots landing on the same provider and start time in a
+// race the overlap check cannot see. Cancelled slots free the time again, so
+// they are excluded — partial filters reject $ne, hence the explicit list.
+export const TIME_OCCUPYING_STATUSES = STATUSES.filter((s) => s !== 'CANCELLED');
+
 appointmentSchema.index(
   { providerId: 1, startsAt: 1 },
   {
     unique: true,
-    partialFilterExpression: { archivedAt: null },
+    partialFilterExpression: {
+      archivedAt: null,
+      status: { $in: TIME_OCCUPYING_STATUSES },
+    },
     name: 'uniq_provider_slot_active',
   }
 );

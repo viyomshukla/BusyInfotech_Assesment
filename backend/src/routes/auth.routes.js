@@ -53,10 +53,14 @@ router.post('/login', validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!user) {
+    return res.status(401).json({ error: 'No account found with that email address.' });
+  }
 
   const ok = await user.checkPassword(password);
-  if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!ok) {
+    return res.status(401).json({ error: 'That password is not correct.' });
+  }
 
   res.cookie('token', signToken(user), cookieOptions());
   res.json(user);
