@@ -9,11 +9,15 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import userRoutes from './routes/user.routes.js';
 const app = express();
 
+// Render terminates TLS at its proxy, so the app sees http. This keeps
+// req.secure and req.ip honest behind it.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/auth', authRoutes);
 app.get('/health', (req, res) => {

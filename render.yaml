@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: riverside-clinic-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      # Render supplies PORT itself — do not set it here.
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      # Set these two in the dashboard: the Atlas connection string, and the
+      # exact origin of the deployed frontend (no trailing slash).
+      - key: MONGO_URI
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false

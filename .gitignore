@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit these; set them in the Render dashboard instead
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# Logs and editor noise
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
