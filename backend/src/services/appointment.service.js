@@ -6,6 +6,7 @@ import { RuleError, assertTransition } from './statusMachine.js';
 import { recordEvent } from './audit.js';
 import VisitNote from '../models/VisitNote.js';
 import { addDays, startOfDay } from 'date-fns';
+import { startOfLocalDay } from '../utils/day.js';
 import AppointmentEvent from '../models/AppointmentEvent.js';
 function assertCanManage(user, providerId, action) {
   if (user.role === 'FRONT_DESK') return;
@@ -197,7 +198,7 @@ export async function generateSlots(input, actor) {
 }
 
 export async function getDaySchedule(dateStr, providerId, actor) {
-  const dayStart = startOfDay(new Date(dateStr));
+  const dayStart = startOfLocalDay(dateStr);
   const dayEnd = addDays(dayStart, 1);
 
   const filter = { startsAt: { $gte: dayStart, $lt: dayEnd }, archivedAt: null };

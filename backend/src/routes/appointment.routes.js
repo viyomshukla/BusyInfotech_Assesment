@@ -8,6 +8,8 @@ import { STATUSES } from '../models/Appointment.js';
 import * as service from '../services/appointment.service.js';
 import VisitNote from '../models/VisitNote.js';
 import { toCsv } from '../utils/csv.js';
+import { startOfLocalDay, endOfLocalDay } from '../utils/day.js';
+import { format } from 'date-fns';
 const noteSchema = z.object({ body: z.string().min(1).max(5000) });
 const router = Router();
 router.use(requireAuth);
@@ -30,10 +32,7 @@ const dayBoundary = (edge) =>
     .transform((value) => {
       if (value === undefined || value === '') return undefined;
       if (typeof value === 'string' && DATE_ONLY.test(value)) {
-        const [y, m, d] = value.split('-').map(Number);
-        return edge === 'end'
-          ? new Date(y, m - 1, d, 23, 59, 59, 999)
-          : new Date(y, m - 1, d, 0, 0, 0, 0);
+        return edge === 'end' ? endOfLocalDay(value) : startOfLocalDay(value);
       }
       return new Date(value);
     })
@@ -181,7 +180,9 @@ router.get('/export/day', async (req, res) => {
   const rows = await service.getDaySchedule(date, providerId, req.user);
 
   const csv = toCsv(rows, [
-    { label: 'Time', value: (r) => new Date(r.startsAt).toISOString().slice(11, 16) },
+    // Local clinic time — toISOString() here would print UTC and read hours out.
+    { label: 'Time', value: (r) => format(new Date(r.startsAt), 'HH:mm') },
+    { label: 'End', value: (r) => format(new Date(r.endsAt), 'HH:mm') },
     { label: 'Duration (min)', value: (r) => r.durationMin },
     { label: 'Provider', value: (r) => r.providerName },
     { label: 'Patient', value: (r) => r.patientName ?? '' },
@@ -189,7 +190,7 @@ router.get('/export/day', async (req, res) => {
     { label: 'Cancel reason', value: (r) => r.cancelReason ?? '' },
   ]);
 
-  const day = new Date(date).toISOString().slice(0, 10);
+  const day = format(startOfLocalDay(date), 'yyyy-MM-dd');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="schedule-${day}.csv"`);
   res.send('\uFEFF' + csv);
