@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useProviders } from '../hooks/useProviders';
 import {
-  Button, Input, Select, StatusBadge, EmptyState, Loading, ErrorNote, PageHeader,
+  Button, Input, Select, StatusBadge, EmptyState, Loading, InlineLoading, ErrorNote, PageHeader,
 } from '../components/ui';
 import { time, dayLabel, STATUS_LABEL } from '../lib/format';
 
@@ -165,7 +165,7 @@ export default function AppointmentsPage() {
             type="checkbox"
             checked={query.archived}
             onChange={(e) => setQuery({ archived: e.target.checked ? 'true' : '' })}
-            className="size-3.5 accent-[var(--color-accent)]"
+            className="size-3.5 accent-(--color-accent)"
           />
           Include archived slots
         </label>
@@ -183,7 +183,15 @@ export default function AppointmentsPage() {
 
       <ErrorNote>{error?.message}</ErrorNote>
 
-      <div className="overflow-hidden rounded-xl border border-rule bg-surface shadow-card">
+      <div className="relative overflow-hidden rounded-xl border border-rule bg-surface shadow-card">
+        {isFetching && !isLoading && (
+          <div className="animate-fade absolute right-4 top-3 z-10">
+            <span className="inline-flex items-center gap-2 rounded-full border border-rule bg-surface px-2.5 py-1 shadow-card">
+              <InlineLoading label="Please wait…" />
+            </span>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -223,7 +231,7 @@ export default function AppointmentsPage() {
           </table>
         </div>
 
-        {isLoading && <Loading />}
+        {isLoading && <Loading hint="Fetching appointments that match your filters." />}
 
         {data?.items.length === 0 && (
           <EmptyState

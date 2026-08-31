@@ -23,7 +23,7 @@ export default function DayPage() {
   const [error, setError] = useState(null);
 
   const { isFrontDesk, user } = useAuth();
-const { data: providers = [], error: providerError } = useProviders();
+  const { data: providers = [], error: providerError } = useProviders();
   const navigate = useNavigate();
 
   const { data = [], isLoading } = useQuery({
@@ -128,11 +128,11 @@ const { data: providers = [], error: providerError } = useProviders();
         </Button>
       </PageHeader>
 
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{error ?? providerError?.message}</ErrorNote>
 
       <Panel>
         {isLoading ? (
-          <Loading />
+          <Loading hint="Loading the schedule for this day." />
         ) : data.length === 0 ? (
           <EmptyState
             title="Nothing scheduled"
@@ -286,8 +286,8 @@ function NewSlotModal({ open, onClose, date, providers }) {
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button type="submit" size="sm" disabled={busy}>
-            {busy ? 'Creating…' : 'Create slot'}
+          <Button type="submit" size="sm" loading={busy}>
+            {busy ? 'Please wait…' : 'Create slot'}
           </Button>
         </div>
       </form>

@@ -19,13 +19,10 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
-        <Panel><Loading label="Loading the dashboard…" rows={2} /></Panel>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <Panel key={i}><Loading rows={2} /></Panel>
-          ))}
-        </div>
+      <div className="mx-auto max-w-6xl">
+        <Panel>
+          <Loading hint="Building today's figures from the appointment record." />
+        </Panel>
       </div>
     );
   }

@@ -21,6 +21,10 @@ const NEXT_STEPS = {
   CHECKED_IN: [{ to: 'COMPLETED', label: 'Complete' }],
 };
 
+// One mutation hook drives every action on this page, so a button only spins
+// when the request in flight is its own.
+const ARCHIVE_PATHS = ['/archive', '/restore'];
+
 export default function AppointmentDetailPage() {
   const { id } = useParams();
   const { user, isFrontDesk } = useAuth();
@@ -42,7 +46,13 @@ export default function AppointmentDetailPage() {
     mutate.mutate(payload, { onSuccess: after });
   }
 
-  if (isLoading) return <Loading label="Loading appointment…" />;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-5xl rounded-xl border border-rule bg-surface shadow-card">
+        <Loading hint="Opening the appointment and its history." />
+      </div>
+    );
+  }
   if (!data) return <ErrorNote>That appointment could not be found.</ErrorNote>;
 
   const { appointment: appt, timeline, notes } = data;
@@ -91,10 +101,13 @@ export default function AppointmentDetailPage() {
                   key={step.to}
                   variant={step.variant ?? 'primary'}
                   size="sm"
+                  loading={mutate.isPending && mutate.variables?.body?.to === step.to}
                   disabled={mutate.isPending}
                   onClick={() => run({ path: '/status', body: { to: step.to } })}
                 >
-                  {step.label}
+                  {mutate.isPending && mutate.variables?.body?.to === step.to
+                    ? 'Please wait…'
+                    : step.label}
                 </Button>
               ))}
               {appt.status === 'OPEN' && (
@@ -115,6 +128,7 @@ export default function AppointmentDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                loading={mutate.isPending && ARCHIVE_PATHS.includes(mutate.variables?.path)}
                 disabled={mutate.isPending}
                 onClick={() =>
                   run({ path: appt.archivedAt ? '/restore' : '/archive' })
@@ -367,8 +381,8 @@ function BookModal({ open, onClose, onSubmit, busy }) {
         </p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={close}>Cancel</Button>
-          <Button type="submit" size="sm" disabled={busy || !patientName.trim()}>
-            {busy ? 'Booking…' : 'Book slot'}
+          <Button type="submit" size="sm" loading={busy} disabled={!patientName.trim()}>
+            {busy ? 'Please wait…' : 'Book slot'}
           </Button>
         </div>
       </form>
@@ -425,8 +439,8 @@ function EditSlotModal({ appt, onClose, onSubmit, busy }) {
         </p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button type="submit" size="sm" disabled={busy}>
-            {busy ? 'Saving…' : 'Save slot'}
+          <Button type="submit" size="sm" loading={busy}>
+            {busy ? 'Please wait…' : 'Save slot'}
           </Button>
         </div>
       </form>

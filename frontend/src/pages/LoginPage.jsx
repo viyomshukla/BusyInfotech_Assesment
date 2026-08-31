@@ -130,8 +130,8 @@ export default function LoginPage() {
 
             <ErrorNote>{error}</ErrorNote>
 
-            <Button type="submit" disabled={busy} className="w-full">
-              {busy ? 'Signing in…' : 'Sign in'}
+            <Button type="submit" loading={busy} className="w-full">
+              {busy ? 'Please wait…' : 'Sign in'}
             </Button>
           </form>
 

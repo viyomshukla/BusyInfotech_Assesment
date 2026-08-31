@@ -5,7 +5,9 @@ import { AlertTriangle, BellOff, Check, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAlerts } from '../hooks/useAlerts';
 import { useAuth } from '../context/AuthContext';
-import { Button, Panel, PageHeader, EmptyState, Loading, ErrorNote } from '../components/ui';
+import {
+  Button, Panel, PageHeader, EmptyState, Loading, InlineLoading, ErrorNote,
+} from '../components/ui';
 import { time, dayLabel, untilNow } from '../lib/format';
 
 export default function AlertsPage() {
@@ -54,7 +56,9 @@ export default function AlertsPage() {
       <ErrorNote>{actionError}</ErrorNote>
 
       {isLoading ? (
-        <Panel><Loading label="Checking for unconfirmed appointments…" /></Panel>
+        <Panel>
+          <Loading hint="Checking for unconfirmed appointments in the next 24 hours." />
+        </Panel>
       ) : error ? (
         <ErrorNote>{error.message}</ErrorNote>
       ) : items.length === 0 ? (
@@ -137,7 +141,8 @@ function AlertRow({ appt, canAct, busy, onAct, onOpen }) {
       </button>
 
       {canAct && (
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {busy && <InlineLoading label="Please wait…" />}
           <Button size="sm" disabled={busy} onClick={() => onAct('confirm')}>
             <Check size={14} strokeWidth={2} /> Confirm
           </Button>

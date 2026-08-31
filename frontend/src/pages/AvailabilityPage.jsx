@@ -4,7 +4,7 @@ import { Plus, Trash2, CalendarPlus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useProviders } from '../hooks/useProviders';
 import { Button, Panel, PageHeader, Field, Input, Select, ErrorNote } from '../components/ui';
-import { time, dateTime, toInputDate } from '../lib/format';
+import { dateTime, toInputDate } from '../lib/format';
 
 const DAYS = [
   { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' },
@@ -156,9 +156,9 @@ export default function AvailabilityPage() {
 
           <ErrorNote>{error}</ErrorNote>
 
-          <Button type="submit" disabled={busy || weekdays.length === 0}>
-            <CalendarPlus size={15} strokeWidth={1.75} />
-            {busy ? 'Generating…' : 'Generate slots'}
+          <Button type="submit" loading={busy} disabled={weekdays.length === 0}>
+            {!busy && <CalendarPlus size={15} strokeWidth={1.75} />}
+            {busy ? 'Please wait…' : 'Generate slots'}
           </Button>
         </form>
       </Panel>

@@ -1,10 +1,11 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, CalendarDays, ListChecks, CalendarPlus, Bell, Users, LogOut,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAlerts } from '../hooks/useAlerts';
+import { Spinner } from './ui';
 
 const LINKS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -17,9 +18,10 @@ const LINKS = [
 
 export function Layout() {
   const { user, isFrontDesk, logout } = useAuth();
-  const { data } = useAlerts();
+  const { data, isLoading: alertsLoading } = useAlerts();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const count = data?.count ?? 0;
   const links = LINKS.filter((l) => !l.frontDeskOnly || isFrontDesk);
@@ -40,7 +42,7 @@ export function Layout() {
 
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           {links.map((link) => (
-            <NavItem key={link.to} {...link} count={count} />
+            <NavItem key={link.to} {...link} count={count} pending={alertsLoading} />
           ))}
         </nav>
 
@@ -80,13 +82,15 @@ export function Layout() {
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
             {links.map((link) => (
-              <NavItem key={link.to} {...link} count={count} compact />
+              <NavItem key={link.to} {...link} count={count} pending={alertsLoading} compact />
             ))}
           </nav>
         </header>
 
         <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
-          <Outlet />
+          <div key={location.pathname} className="animate-rise">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
@@ -138,7 +142,9 @@ function Avatar({ name }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end = false, alerts = false, count = 0, compact = false }) {
+function NavItem({
+  to, label, icon: Icon, end = false, alerts = false, count = 0, pending = false, compact = false,
+}) {
   const badge = alerts ? count : 0;
 
   return (
@@ -146,7 +152,7 @@ function NavItem({ to, label, icon: Icon, end = false, alerts = false, count = 0
       to={to}
       end={end}
       className={({ isActive }) =>
-        `group flex items-center gap-2.5 rounded-md text-sm transition-colors ${
+        `group relative flex items-center gap-2.5 rounded-md text-sm transition-colors ${
           compact ? 'shrink-0 px-2.5 py-1.5' : 'px-3 py-2'
         } ${
           isActive
@@ -155,17 +161,28 @@ function NavItem({ to, label, icon: Icon, end = false, alerts = false, count = 0
         }`
       }
     >
-      <Icon size={16} strokeWidth={1.75} className="shrink-0" />
-      <span className="whitespace-nowrap">{label}</span>
-      {badge > 0 && (
-        <span
-          aria-label={`${badge} unconfirmed`}
-          className="tabular ml-auto inline-flex min-w-[1.25rem] items-center justify-center
-                     rounded-full bg-status-noshow px-1.5 py-0.5 text-[10px] font-semibold
-                     leading-none text-white"
-        >
-          {badge}
-        </span>
+      {({ isActive }) => (
+        <>
+          {isActive && !compact && (
+            <span
+              aria-hidden
+              className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+            />
+          )}
+          <Icon size={16} strokeWidth={1.75} className="shrink-0" />
+          <span className="whitespace-nowrap">{label}</span>
+          {alerts && pending && <Spinner size={12} className="ml-auto text-faint" />}
+          {badge > 0 && !pending && (
+            <span
+              aria-label={`${badge} unconfirmed`}
+              className="tabular ml-auto inline-flex min-w-5 items-center justify-center
+                         rounded-full bg-status-noshow px-1.5 py-0.5 text-[10px] font-semibold
+                         leading-none text-white"
+            >
+              {badge}
+            </span>
+          )}
+        </>
       )}
     </NavLink>
   );

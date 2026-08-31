@@ -9,14 +9,10 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import userRoutes from './routes/user.routes.js';
 const app = express();
 
-// Render terminates TLS at its proxy, so the app sees http. This keeps
-// req.secure and req.ip honest behind it.
 app.set('trust proxy', 1);
 
 app.use(helmet());
-// CLIENT_ORIGIN may list several origins, comma separated, so one value covers
-// local development and the deployed frontend. A trailing slash is tolerated
-// because an Origin header never carries one.
+
 const trimSlash = (value) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN ?? '')

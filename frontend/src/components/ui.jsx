@@ -1,15 +1,99 @@
 import { useEffect } from 'react';
 import { STATUS_LABEL, STATUS_COLOR } from '../lib/format';
 
-export function Button({ variant = 'primary', size = 'md', className = '', ...props }) {
+// A circular indeterminate spinner. It inherits `currentColor`, so it sits
+// correctly inside a button, a panel, or on the accent background.
+export function Spinner({ size = 20, className = '', strokeWidth = 2.5 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className={`shrink-0 animate-spin ${className}`}
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9.5"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        className="opacity-20"
+      />
+      <path
+        d="M21.5 12A9.5 9.5 0 0 0 12 2.5"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+// The in-panel waiting state: a turning circle over "Please wait…".
+export function Loading({ label = 'Please wait…', hint, size = 30, className = '' }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={`animate-fade flex flex-col items-center justify-center gap-3.5 px-6 py-16
+                  text-center ${className}`}
+    >
+      <Spinner size={size} className="text-accent" />
+      <div>
+        <p className="text-sm font-medium text-ink">{label}</p>
+        <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted">
+          {hint ?? 'Fetching the latest from the clinic record.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// The same thing, centred on an otherwise empty screen — used before the
+// session has resolved, when there is no layout to sit inside yet.
+export function PageLoader({ label = 'Please wait…', hint }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-paper">
+      <Loading label={label} hint={hint} size={36} />
+    </div>
+  );
+}
+
+// A small spinner with text, for spots too tight for the full block.
+export function InlineLoading({ label = 'Please wait…', className = '' }) {
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={`inline-flex items-center gap-2 text-xs text-muted ${className}`}
+    >
+      <Spinner size={13} className="text-accent" />
+      {label}
+    </span>
+  );
+}
+
+export function Button({
+  variant = 'primary',
+  size = 'md',
+  loading = false,
+  disabled = false,
+  className = '',
+  children,
+  ...props
+}) {
   const base =
     'inline-flex items-center justify-center gap-1.5 rounded-md font-medium ' +
-    'transition-[background-color,border-color,color,box-shadow] duration-150 ' +
-    'disabled:cursor-not-allowed disabled:opacity-45';
+    'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ' +
+    'disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none';
 
   const variants = {
     primary:
-      'bg-accent text-white shadow-card hover:bg-accent-deep active:translate-y-px',
+      'bg-accent text-white shadow-card hover:bg-accent-deep hover:shadow-raise ' +
+      'active:translate-y-px disabled:hover:bg-accent',
     secondary:
       'border border-rule bg-surface text-ink shadow-card ' +
       'hover:border-accent hover:text-accent active:translate-y-px',
@@ -25,7 +109,15 @@ export function Button({ variant = 'primary', size = 'md', className = '', ...pr
   };
 
   return (
-    <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props} />
+    <button
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...props}
+    >
+      {loading && <Spinner size={size === 'sm' ? 13 : 15} strokeWidth={3} />}
+      {children}
+    </button>
   );
 }
 
@@ -54,7 +146,7 @@ export function Field({ label, hint, error, children, className = '' }) {
 
 const CONTROL =
   'w-full rounded-md border border-rule bg-surface px-3 text-sm text-ink transition-colors ' +
-  'placeholder:text-faint hover:border-faint/70 ' +
+  'placeholder:text-faint hover:border-faint/70 disabled:cursor-not-allowed disabled:bg-paper ' +
   'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15';
 
 export function Input({ className = '', ...props }) {
@@ -76,7 +168,8 @@ export function Select({ className = '', children, ...props }) {
 export function Panel({ title, action, children, className = '' }) {
   return (
     <section
-      className={`overflow-hidden rounded-xl border border-rule bg-surface shadow-card ${className}`}
+      className={`overflow-hidden rounded-xl border border-rule bg-surface shadow-card
+                  transition-shadow hover:shadow-raise ${className}`}
     >
       {(title || action) && (
         <header className="flex items-center justify-between gap-4 border-b border-rule-soft px-5 py-3">
@@ -104,33 +197,15 @@ export function StatusBadge({ status }) {
 
 export function EmptyState({ title, hint, action, icon: Icon }) {
   return (
-    <div className="px-6 py-16 text-center">
+    <div className="animate-fade px-6 py-16 text-center">
       {Icon && (
-        <span className="mx-auto mb-4 flex size-10 items-center justify-center rounded-full bg-paper text-faint">
-          <Icon size={18} strokeWidth={1.75} />
+        <span className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-paper text-faint">
+          <Icon size={19} strokeWidth={1.75} />
         </span>
       )}
       <p className="text-sm font-medium">{title}</p>
       {hint && <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-muted">{hint}</p>}
       {action && <div className="mt-5">{action}</div>}
-    </div>
-  );
-}
-
-export function Skeleton({ className = '' }) {
-  return <div className={`animate-pulse-soft rounded bg-rule-soft ${className}`} />;
-}
-
-export function Loading({ label = 'Loading…', rows = 3 }) {
-  return (
-    <div className="space-y-3 p-5" role="status" aria-label={label}>
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-center gap-4">
-          <Skeleton className="h-3 w-20 shrink-0" />
-          <Skeleton className="h-3 flex-1" />
-          <Skeleton className="h-3 w-16 shrink-0" />
-        </div>
-      ))}
     </div>
   );
 }
@@ -151,11 +226,20 @@ export function ErrorNote({ children }) {
 export function Modal({ open, title, onClose, children, width = 'max-w-md' }) {
   useEffect(() => {
     if (!open) return;
+
     function onKey(e) {
       if (e.key === 'Escape') onClose();
     }
+
+    // Stop the page behind the dialog from scrolling with it.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open, onClose]);
 
   if (!open) return null;

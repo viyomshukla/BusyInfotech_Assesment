@@ -445,7 +445,21 @@ directly — the API's wording is the wording the user sees.
   without any manual wiring.
 - `components/ui.jsx` is the whole design system — `Button`, `Panel`,
   `PageHeader`, `Field`, `Input`, `Textarea`, `Select`, `StatusBadge`,
-  `EmptyState`, `Skeleton`, `Loading`, `ErrorNote`, `Modal`.
+  `EmptyState`, `Spinner`, `Loading`, `PageLoader`, `InlineLoading`,
+  `ErrorNote`, `Modal`.
+- **Waiting is always visible.** Every wait resolves to the same thing: a
+  turning circle over **Please wait…** and a line saying what is being fetched.
+  `PageLoader` covers the whole screen while the session is being checked,
+  `Loading` fills a panel while its data is on the way, `InlineLoading` sits
+  beside a row being acted on, and `Button` takes a `loading` prop that puts a
+  spinner inside the button and disables it for the duration. A hairline
+  progress bar across the top of the window tracks `useIsFetching` +
+  `useIsMutating`, so background refetches are visible without blanking a panel
+  that already holds good data.
+- **Routes are code-split.** Every page behind the session is a `lazy()` import
+  behind a `Suspense` boundary that renders the same waiting state, so the
+  charting library loads with the dashboard rather than with the login screen —
+  the initial bundle is 361 kB (116 kB gzipped) instead of 784 kB.
 - Tailwind v4 is configured entirely through `@theme` tokens in `index.css` —
   ink/muted/faint text, paper/surface grounds, a status colour per appointment
   state, three shadow levels, and Archivo + IBM Plex Mono. There is no

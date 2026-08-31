@@ -58,7 +58,7 @@ export default function StaffPage() {
         action={<span className="text-xs text-faint">Fixed at one account</span>}
       >
         {isLoading ? (
-          <Loading rows={1} />
+          <Loading className="py-10" hint="Loading the staff directory." />
         ) : (
           <ul className="divide-y divide-rule-soft">
             {frontDesk.map((u) => (
@@ -73,7 +73,7 @@ export default function StaffPage() {
         action={<span className="tabular text-xs text-faint">{providers.length}</span>}
       >
         {isLoading ? (
-          <Loading rows={3} />
+          <Loading className="py-10" hint="Loading provider accounts." />
         ) : providers.length === 0 ? (
           <EmptyState
             icon={Stethoscope}
@@ -140,8 +140,8 @@ export default function StaffPage() {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={close}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={addProvider.isPending}>
-              {addProvider.isPending ? 'Adding…' : 'Add provider'}
+            <Button type="submit" size="sm" loading={addProvider.isPending}>
+              {addProvider.isPending ? 'Please wait…' : 'Add provider'}
             </Button>
           </div>
         </form>
