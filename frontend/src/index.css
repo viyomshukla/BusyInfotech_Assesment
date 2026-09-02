@@ -2,16 +2,19 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-ink: #141b2b;
-  --color-muted: #5c6b84;
-  --color-faint: #8b98ad;
-  --color-paper: #f4f6f9;
+  --color-ink: #111827;
+  --color-ink-soft: #2c3648;
+  --color-muted: #56637a;
+  --color-faint: #8593a8;
+  --color-paper: #f1f4f9;
   --color-surface: #ffffff;
-  --color-rule: #e3e7ee;
-  --color-rule-soft: #eef1f6;
-  --color-accent: #35528f;
-  --color-accent-deep: #263d6d;
-  --color-accent-soft: #eaf0fa;
+  --color-surface-sunk: #f7f9fc;
+  --color-rule: #dfe4ed;
+  --color-rule-soft: #edf0f6;
+  --color-accent: #2f4f96;
+  --color-accent-deep: #1e3363;
+  --color-accent-bright: #4c74c8;
+  --color-accent-soft: #e8eefb;
 
   --color-status-open: #7c8aa0;
   --color-status-requested: #b26a00;
@@ -21,9 +24,9 @@
   --color-status-noshow: #b42318;
   --color-status-cancelled: #98a2b3;
 
-  --shadow-card: 0 1px 2px rgb(20 27 43 / 0.04), 0 1px 3px rgb(20 27 43 / 0.06);
-  --shadow-raise: 0 2px 4px rgb(20 27 43 / 0.05), 0 8px 20px -6px rgb(20 27 43 / 0.12);
-  --shadow-pop: 0 16px 48px -12px rgb(20 27 43 / 0.26);
+  --shadow-card: 0 1px 2px rgb(17 24 39 / 0.04), 0 1px 3px rgb(17 24 39 / 0.06);
+  --shadow-raise: 0 2px 4px rgb(17 24 39 / 0.05), 0 10px 24px -8px rgb(17 24 39 / 0.14);
+  --shadow-pop: 0 16px 48px -12px rgb(17 24 39 / 0.28);
 
   --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -51,6 +54,54 @@ body {
 .tint {
   background: color-mix(in srgb, var(--tint-color) 10%, transparent);
   color: var(--tint-color);
+}
+
+/* The same wash, strong enough to carry a block on the day sheet, with a rule
+   down the leading edge so a run of slots stays scannable by colour alone. */
+.tint-block {
+  background: color-mix(in srgb, var(--tint-color) 15%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--tint-color) 35%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--tint-color);
+}
+
+.tint-block:hover {
+  background: color-mix(in srgb, var(--tint-color) 24%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--tint-color) 45%, transparent);
+}
+
+/* The navy rail. A flat block of colour reads as a hole in the page at this
+   width, so it carries a slight vertical gradient instead. */
+.rail {
+  background: linear-gradient(180deg, var(--color-accent-deep) 0%, #16274e 100%);
+}
+
+/* Hour and half-hour rules for the day-sheet grid, painted as one background
+   rather than a div per line per column. --row is the height of one hour. */
+.day-grid {
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      var(--color-rule) 0,
+      var(--color-rule) 1px,
+      transparent 1px,
+      transparent var(--row)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--color-rule-soft) 0,
+      var(--color-rule-soft) 1px,
+      transparent 1px,
+      transparent calc(var(--row) / 2)
+    );
+}
+
+/* Outside opening hours the grid stays visible but recedes. */
+.day-grid-closed {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--color-rule-soft) 60%, transparent) 0 6px,
+    transparent 6px 12px
+  );
 }
 
 :focus-visible {

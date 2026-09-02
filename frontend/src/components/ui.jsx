@@ -121,15 +121,91 @@ export function Button({
   );
 }
 
-export function PageHeader({ title, subtitle, children }) {
+export function PageHeader({ eyebrow, title, subtitle, children }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold leading-tight tracking-tight">{title}</h1>
+        {eyebrow && (
+          <p className="tabular mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-faint">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
         {subtitle && <p className="mt-1.5 text-sm leading-relaxed text-muted">{subtitle}</p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </header>
+  );
+}
+
+// A row of buttons that behave as one control — the day sheet uses it to swap
+// between the timeline and the list without spending a modal or a dropdown on
+// a choice this small.
+export function SegmentedControl({ value, onChange, options, ariaLabel }) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex rounded-lg border border-rule bg-surface p-0.5 shadow-card"
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={active}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium
+                        transition-colors ${
+                          active
+                            ? 'bg-accent-soft text-accent'
+                            : 'text-muted hover:text-ink'
+                        }`}
+          >
+            {option.icon && <option.icon size={14} strokeWidth={1.75} />}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// A headline figure. The dashboard and the day sheet both need one, and two
+// near-identical copies is how they drift apart.
+export function Stat({ label, value, sub, accent, icon: Icon, tone = 'card' }) {
+  const flat = tone === 'flat';
+
+  return (
+    <div
+      className={
+        flat
+          ? 'px-4 py-3'
+          : 'rounded-xl border border-rule bg-surface px-5 py-4 shadow-card'
+      }
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs leading-snug text-muted">{label}</p>
+        {Icon && (
+          <span
+            className="tint flex size-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ '--tint-color': accent }}
+          >
+            <Icon size={14} strokeWidth={2} />
+          </span>
+        )}
+      </div>
+      <p
+        className={`tabular font-semibold leading-none tracking-tight ${
+          flat ? 'mt-2 text-[22px]' : 'mt-3 text-[32px]'
+        }`}
+        style={{ color: value > 0 || typeof value === 'string' ? accent : 'var(--color-faint)' }}
+      >
+        {value}
+      </p>
+      {sub && <p className="mt-1.5 text-[11px] leading-snug text-faint">{sub}</p>}
+    </div>
   );
 }
 
@@ -168,11 +244,10 @@ export function Select({ className = '', children, ...props }) {
 export function Panel({ title, action, children, className = '' }) {
   return (
     <section
-      className={`overflow-hidden rounded-xl border border-rule bg-surface shadow-card
-                  transition-shadow hover:shadow-raise ${className}`}
+      className={`overflow-hidden rounded-xl border border-rule bg-surface shadow-card ${className}`}
     >
       {(title || action) && (
-        <header className="flex items-center justify-between gap-4 border-b border-rule-soft px-5 py-3">
+        <header className="flex items-center justify-between gap-4 border-b border-rule px-5 py-3">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
           {action}
         </header>

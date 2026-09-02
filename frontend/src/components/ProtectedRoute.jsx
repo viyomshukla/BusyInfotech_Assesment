@@ -1,14 +1,21 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSlowRequest, COLD_START_HINT } from '../hooks/useSlowRequest';
 import { PageLoader, EmptyState } from './ui';
 
 export function ProtectedRoute({ children, frontDeskOnly = false }) {
   const { user, loading, isFrontDesk } = useAuth();
   const location = useLocation();
+  const slow = useSlowRequest(loading);
 
   if (loading) {
-    return <PageLoader label="Please wait…" hint="Checking your clinic session." />;
+    return (
+      <PageLoader
+        label={slow ? 'Waking the server…' : 'Please wait…'}
+        hint={slow ? COLD_START_HINT : 'Checking your clinic session.'}
+      />
+    );
   }
 
   if (!user) {

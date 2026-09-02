@@ -81,7 +81,11 @@ const generateSchema = z.object({
   blocks: z
     .array(
       z.object({
-        startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM'),
+        // The clock picker can set seconds, so the seconds component is
+        // accepted as well as the plain HH:MM the field used to carry.
+        startTime: z
+          .string()
+          .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Use HH:MM or HH:MM:SS'),
         durationMin: z.number().int().min(5).max(480),
       })
     )

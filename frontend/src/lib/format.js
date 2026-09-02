@@ -46,3 +46,17 @@ export const STATUS_COLOR = {
   NO_SHOW: 'var(--color-status-noshow)',
   CANCELLED: 'var(--color-status-cancelled)',
 };
+// The value a clock picker holds: seconds included, because the picker can set
+// them and dropping them silently would move the appointment.
+export function timeInput(value) {
+  return format(new Date(value), 'HH:mm:ss');
+}
+
+// Build an instant from a yyyy-MM-dd and an HH:mm or HH:mm:ss, in the clinic's
+// own timezone — the browser's, which is the one the day sheet is drawn in.
+export function toIso(dateStr, timeStr) {
+  const [h = 0, m = 0, s = 0] = String(timeStr).split(':').map(Number);
+  const at = new Date(`${dateStr}T00:00:00`);
+  at.setHours(h, m, s, 0);
+  return at.toISOString();
+}

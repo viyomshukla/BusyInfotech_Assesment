@@ -62,8 +62,12 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     return res.status(401).json({ error: 'That password is not correct.' });
   }
 
-  res.cookie('token', signToken(user), cookieOptions());
-  res.json(user);
+  // Set as a cookie for the browsers that keep it, and returned in the body so
+  // a client whose browser blocked the cross-site cookie (Safari does by
+  // default) can send it back as a bearer token instead.
+  const token = signToken(user);
+  res.cookie('token', token, cookieOptions());
+  res.json({ ...user.toJSON(), token });
 });
 
 router.post('/logout', (req, res) => {

@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { format } from 'date-fns';
-import { CalendarCheck, UserCheck, UserX, CalendarClock } from 'lucide-react';
+import {
+  CalendarCheck, UserCheck, UserX, CalendarClock, Minus, TrendingDown, TrendingUp,
+} from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Panel, PageHeader, Loading, ErrorNote, EmptyState } from '../components/ui';
+import { Avatar } from '../components/Layout';
+import { Panel, PageHeader, Loading, ErrorNote, EmptyState, Stat } from '../components/ui';
 import { STATUS_LABEL, STATUS_COLOR } from '../lib/format';
 
 export default function DashboardPage() {
@@ -19,7 +22,7 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <Panel>
           <Loading hint="Building today's figures from the appointment record." />
         </Panel>
@@ -30,9 +33,14 @@ export default function DashboardPage() {
 
   const { headline, byProvider, byStatus, noShowTrend } = data;
 
+  const totalOnRecord = byStatus.reduce((sum, row) => sum + row.count, 0);
+  const latest = noShowTrend.at(-1);
+  const previous = noShowTrend.at(-2);
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
+        eyebrow={format(new Date(), 'EEEE d MMMM')}
         title={isFrontDesk ? 'Clinic today' : `Your day, ${user.name}`}
         subtitle={
           isFrontDesk
@@ -45,83 +53,97 @@ export default function DashboardPage() {
         <Stat
           label="Appointments today"
           value={headline.appointmentsToday}
+          sub={`${byProvider.length} ${byProvider.length === 1 ? 'provider' : 'providers'} on the sheet`}
           icon={CalendarCheck}
           accent="var(--color-accent)"
         />
         <Stat
           label="Checked in now"
           value={headline.checkedInNow}
+          sub="Waiting or with a provider"
           icon={UserCheck}
           accent="var(--color-status-checkedin)"
         />
         <Stat
           label="No-shows this week"
           value={headline.noShowsThisWeek}
+          sub={latest ? `${latest.rate}% of this week's attended-or-missed` : 'No history yet'}
           icon={UserX}
           accent="var(--color-status-noshow)"
         />
         <Stat
           label="Confirmed upcoming"
           value={headline.upcomingConfirmed}
+          sub="Future appointments already confirmed"
           icon={CalendarClock}
           accent="var(--color-status-confirmed)"
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="By provider">
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <Panel
+          title="Workload by provider"
+          action={<span className="tabular text-xs text-faint">{totalOnRecord} on record</span>}
+          className="flex flex-col"
+        >
           {byProvider.length === 0 ? (
             <EmptyState title="Nothing to show" hint="No appointments have been created yet." />
           ) : (
-            <ul className="divide-y divide-rule">
+            <ul className="divide-y divide-rule-soft">
               {byProvider.map((row) => (
                 <ProviderRow
                   key={row.provider}
                   provider={row.provider}
                   count={row.count}
-                  max={Math.max(...byProvider.map((r) => r.count))}
+                  max={byProvider[0].count}
+                  share={totalOnRecord ? Math.round((row.count / totalOnRecord) * 100) : 0}
                 />
               ))}
             </ul>
           )}
         </Panel>
 
-        <Panel title="By status">
+        <Panel title="Appointments by status" className="flex flex-col">
           {byStatus.length === 0 ? (
             <EmptyState title="Nothing to show" />
           ) : (
-            <div className="p-5">
-              <ResponsiveContainer width="100%" height={220}>
+            // Laid out horizontally: seven status names across an axis need
+            // rotating to fit, and a label you have to tilt your head to read is
+            // a label nobody reads.
+            <div className="flex-1 p-5">
+              <ResponsiveContainer width="100%" height={Math.max(220, byStatus.length * 34)}>
                 <BarChart
+                  layout="vertical"
                   data={byStatus.map((r) => ({
                     name: STATUS_LABEL[r.status] ?? r.status,
                     count: r.count,
                     fill: STATUS_COLOR[r.status],
                   }))}
-                  margin={{ top: 4, right: 4, left: -18, bottom: 0 }}
+                  margin={{ top: 0, right: 28, left: 0, bottom: 0 }}
+                  barCategoryGap={8}
                 >
-                  <CartesianGrid vertical={false} stroke="var(--color-rule)" />
+                  <CartesianGrid horizontal={false} stroke="var(--color-rule-soft)" />
                   <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
-                    axisLine={{ stroke: 'var(--color-rule)' }}
-                    tickLine={false}
-                    interval={0}
-                    angle={-35}
-                    textAnchor="end"
-                    height={62}
-                  />
-                  <YAxis
+                    type="number"
                     tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
                     axisLine={false}
                     tickLine={false}
                     allowDecimals={false}
                   />
-                  <Tooltip
-                    cursor={{ fill: 'var(--color-accent-soft)' }}
-                    contentStyle={tooltipStyle}
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={86}
+                    tick={{ fontSize: 12, fill: 'var(--color-ink)' }}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <Bar dataKey="count" radius={[3, 3, 0, 0]} />
+                  <Tooltip cursor={{ fill: 'var(--color-accent-soft)' }} contentStyle={tooltipStyle} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                    {byStatus.map((row) => (
+                      <Cell key={row.status} fill={STATUS_COLOR[row.status]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -131,7 +153,7 @@ export default function DashboardPage() {
 
       <Panel
         title="No-show rate, last eight weeks"
-        action={<span className="text-xs text-muted">Percent of attended-or-missed appointments</span>}
+        action={<TrendDelta latest={latest} previous={previous} />}
       >
         {noShowTrend.length === 0 ? (
           <EmptyState
@@ -141,7 +163,7 @@ export default function DashboardPage() {
         ) : (
           <div className="p-5">
             <ResponsiveContainer width="100%" height={240}>
-              <LineChart
+              <AreaChart
                 data={noShowTrend.map((r) => ({
                   week: format(new Date(r.weekStarting), 'd MMM'),
                   rate: r.rate,
@@ -150,7 +172,13 @@ export default function DashboardPage() {
                 }))}
                 margin={{ top: 4, right: 8, left: -18, bottom: 0 }}
               >
-                <CartesianGrid vertical={false} stroke="var(--color-rule)" />
+                <defs>
+                  <linearGradient id="noShowFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-status-noshow)" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="var(--color-status-noshow)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="var(--color-rule-soft)" />
                 <XAxis
                   dataKey="week"
                   tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
@@ -170,15 +198,16 @@ export default function DashboardPage() {
                     'No-show rate',
                   ]}
                 />
-                <Line
+                <Area
                   type="monotone"
                   dataKey="rate"
                   stroke="var(--color-status-noshow)"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: 'var(--color-status-noshow)' }}
+                  fill="url(#noShowFill)"
+                  dot={{ r: 3, fill: 'var(--color-status-noshow)', strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -192,50 +221,53 @@ const tooltipStyle = {
   border: '1px solid var(--color-rule)',
   fontSize: 12,
   fontFamily: 'Archivo, sans-serif',
-  boxShadow: '0 4px 12px rgb(27 35 51 / 0.08)',
+  boxShadow: '0 4px 12px rgb(17 24 39 / 0.10)',
 };
 
-function Stat({ label, value, accent, icon: Icon }) {
-  const live = value > 0;
+// Week-on-week movement in the no-show rate. Fewer missed appointments is the
+// good direction, so the arrow that points down is the green one.
+function TrendDelta({ latest, previous }) {
+  if (!latest || !previous) return null;
+
+  const delta = Number((latest.rate - previous.rate).toFixed(1));
+  const flat = Math.abs(delta) < 0.05;
+  const Icon = flat ? Minus : delta > 0 ? TrendingUp : TrendingDown;
+  const color = flat
+    ? 'var(--color-muted)'
+    : delta > 0
+      ? 'var(--color-status-noshow)'
+      : 'var(--color-status-checkedin)';
 
   return (
-    <div
-      className="group rounded-xl border border-rule bg-surface px-5 py-4 shadow-card
-                 transition-shadow hover:shadow-raise"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs leading-snug text-muted">{label}</p>
-        {Icon && (
-          <span
-            className="tint flex size-7 shrink-0 items-center justify-center rounded-lg"
-            style={{ '--tint-color': accent }}
-          >
-            <Icon size={14} strokeWidth={2} />
-          </span>
-        )}
-      </div>
-      <p
-        className="tabular mt-3 text-[32px] font-semibold leading-none tracking-tight"
-        style={live ? { color: accent } : { color: 'var(--color-faint)' }}
-      >
-        {value}
-      </p>
-    </div>
+    <span className="flex items-center gap-2 text-xs text-muted">
+      <span className="tabular text-sm font-semibold text-ink">{latest.rate}%</span>
+      <span className="inline-flex items-center gap-1 font-medium" style={{ color }}>
+        <Icon size={13} strokeWidth={2.25} />
+        {flat ? 'level' : `${Math.abs(delta)} pts`}
+      </span>
+      <span className="hidden sm:inline">on last week</span>
+    </span>
   );
 }
 
-function ProviderRow({ provider, count, max }) {
+function ProviderRow({ provider, count, max, share }) {
   return (
-    <li className="px-5 py-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="truncate text-sm">{provider}</span>
-        <span className="tabular shrink-0 text-sm font-medium">{count}</span>
-      </div>
-      <div className="mt-2 h-1.5 rounded-full bg-rule-soft">
-        <div
-          className="h-1.5 rounded-full bg-accent transition-[width] duration-500"
-          style={{ width: `${max ? (count / max) * 100 : 0}%` }}
-        />
+    <li className="flex items-center gap-3 px-5 py-3">
+      <Avatar name={provider} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="truncate text-sm">{provider}</span>
+          <span className="tabular shrink-0 text-sm font-medium">
+            {count}
+            <span className="ml-1.5 text-xs font-normal text-faint">{share}%</span>
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 rounded-full bg-rule-soft">
+          <div
+            className="h-1.5 rounded-full bg-accent transition-[width] duration-500"
+            style={{ width: `${max ? (count / max) * 100 : 0}%` }}
+          />
+        </div>
       </div>
     </li>
   );

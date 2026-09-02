@@ -106,9 +106,10 @@ export async function generateSlots(input, actor) {
     if (!weekdays.includes(day.getDay())) continue;
 
     for (const block of blocks) {
-      const [hour, minute] = block.startTime.split(':').map(Number);
+      // A block start may carry seconds now that the time is picked off a clock.
+      const [hour, minute, second = 0] = block.startTime.split(':').map(Number);
       const startsAt = new Date(day);
-      startsAt.setHours(hour, minute, 0, 0);
+      startsAt.setHours(hour, minute, second, 0);
 
       candidates.push({
         startsAt,

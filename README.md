@@ -267,10 +267,11 @@ and 404 where appropriate) that the Express error handler turns into a JSON
 
 ## Roles and permissions
 
-Authentication is a JWT stored in an httpOnly cookie named `token`, signed for
-7 days. `requireAuth` verifies it and loads the user; `requireRole(...)` gates
-by role. The frontend never touches the token — it just sends
-`withCredentials: true`.
+Authentication is a JWT signed for 7 days. It travels in an httpOnly cookie
+named `token`, and `requireAuth` also accepts it as `Authorization: Bearer …`
+— Safari blocks the cross-site cookie by default, so the frontend keeps the
+token from `/auth/login` and sends it as a header as well. `requireRole(...)`
+gates by role.
 
 | Capability | Front desk | Provider |
 | --- | --- | --- |
@@ -324,7 +325,7 @@ Base URL: `${VITE_API_URL}/api`. All routes except `/auth/login`,
 
 | Method | Path | Who | Body / notes |
 | --- | --- | --- | --- |
-| `POST` | `/login` | anyone | `{ email, password }` → sets the cookie, returns the user. Distinguishes "no account with that email" from "that password is not correct" (both 401). |
+| `POST` | `/login` | anyone | `{ email, password }` → sets the cookie and returns the user plus a `token` field for browsers that refuse the cookie. Distinguishes "no account with that email" from "that password is not correct" (both 401). |
 | `POST` | `/logout` | anyone | Clears the cookie. |
 | `GET` | `/me` | authed | The current user; the frontend calls this on boot to restore a session. |
 | `POST` | `/register` | front desk | `{ email, password (≥8), name, role }`. 409 on a duplicate email or a second front-desk account. |
@@ -433,8 +434,10 @@ directly — the API's wording is the wording the user sees.
 **How it hangs together**
 
 - `AuthContext` calls `/auth/me` once on mount and holds `{ user, loading,
-  login, logout, isFrontDesk, isProvider }`. Because the session is a cookie,
-  a refresh restores it with no token juggling.
+  login, logout, isFrontDesk, isProvider }`, so a refresh restores the session.
+  `lib/api.js` also stores the login token under `riverside.token` and attaches
+  it as a bearer header on every request — the cookie carries the session where
+  the browser keeps it, the header covers Safari where it does not.
 - `ProtectedRoute` renders a loading state while that resolves, redirects to
   `/login` with the attempted location in router state, and shows a polite
   "front desk only" panel rather than a hard redirect when the role is wrong.
@@ -576,6 +579,14 @@ With the API and the frontend on different domains, the session cookie must be
 and `CLIENT_ORIGIN` must list the frontend exactly — a mismatch shows up as a
 login that appears to succeed but leaves you signed out.
 
+Safari goes further: "Prevent cross-site tracking" is on out of the box, and it
+drops a `SameSite=None` cookie from a different registrable domain no matter how
+it is configured. That is why `/auth/login` also returns the token in the body
+and `requireAuth` accepts a bearer header — Safari signs in on the header while
+every other browser keeps using the cookie. Putting the API behind the site's
+own domain (a `/api` proxy or an `api.` subdomain) would make the cookie
+first-party and remove the need for the fallback.
+
 ---
 
 ## Troubleshooting
@@ -592,6 +603,15 @@ uses a transaction. Use Atlas, or start a local single-node replica set:
 sticking. Check that `CLIENT_ORIGIN` matches the browser origin exactly, that
 `VITE_API_URL` has no trailing slash and no `/api`, and that both sides are
 HTTPS in production.
+
+**"Not authenticated" in Safari, fine in Chrome** — Safari is blocking the
+cross-site session cookie. The bearer-token fallback in `lib/api.js` covers it,
+so make sure both sides are on the current build; if it comes back, check that
+`localStorage` is reachable (a locked-down private window blocks it too).
+
+**The first request takes forever** — Render's free tier sleeps the API when it
+is idle. The loading state says so after four seconds; the wake-up can take
+close to a minute, and everything after it is normal speed.
 
 **Blocked by CORS** — add the origin to `CLIENT_ORIGIN` (comma-separated) and
 restart the API. The value is read once at startup.

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { api, setToken } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -17,13 +17,20 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const res = await api.post('/auth/login', { email, password });
-    setUser(res.data);
-    return res.data;
+    // Kept for the browsers that dropped the cookie; harmless where they did not.
+    const { token, ...user } = res.data;
+    setToken(token);
+    setUser(user);
+    return user;
   }
 
   async function logout() {
-    await api.post('/auth/logout');
-    setUser(null);
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      setToken(null);
+      setUser(null);
+    }
   }
 
   const value = {

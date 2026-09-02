@@ -6,11 +6,14 @@ import { useProviders } from '../hooks/useProviders';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { TimePicker } from '../components/TimePicker';
 import {
   Button, Panel, StatusBadge, Modal, Field, Textarea, Select, Input,
   Loading, ErrorNote, EmptyState,
 } from '../components/ui';
-import { time, fullDate, dateTime, toInputDate, STATUS_LABEL } from '../lib/format';
+import {
+  time, fullDate, dateTime, toInputDate, timeInput, toIso, STATUS_LABEL,
+} from '../lib/format';
 
 const NEXT_STEPS = {
   REQUESTED: [{ to: 'CONFIRMED', label: 'Confirm' }],
@@ -392,7 +395,7 @@ function BookModal({ open, onClose, onSubmit, busy }) {
 
 function EditSlotModal({ appt, onClose, onSubmit, busy }) {
   const [date, setDate] = useState(toInputDate(appt.startsAt));
-  const [startTime, setStartTime] = useState(time(appt.startsAt));
+  const [startTime, setStartTime] = useState(timeInput(appt.startsAt));
   const [durationMin, setDurationMin] = useState(appt.durationMin);
 
   return (
@@ -403,7 +406,7 @@ function EditSlotModal({ appt, onClose, onSubmit, busy }) {
           e.preventDefault();
           onSubmit(
             {
-              startsAt: new Date(date + 'T' + startTime + ':00').toISOString(),
+              startsAt: toIso(date, startTime),
               durationMin: Number(durationMin),
             },
             onClose
@@ -415,11 +418,11 @@ function EditSlotModal({ appt, onClose, onSubmit, busy }) {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </Field>
           <Field label="Start time">
-            <Input
-              type="time"
+            <TimePicker
+              withSeconds
+              ariaLabel="Start time"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              required
+              onChange={setStartTime}
             />
           </Field>
         </div>

@@ -34,30 +34,30 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-rule
-                   bg-surface lg:flex"
-      >
+      <aside className="rail fixed inset-y-0 left-0 z-30 hidden w-64 flex-col text-white lg:flex">
         <Brand />
 
-        <nav className="flex-1 space-y-0.5 px-3 py-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+          <p className="tabular px-3 pb-2 text-[10px] uppercase tracking-[0.18em] text-white/35">
+            Clinic
+          </p>
           {links.map((link) => (
             <NavItem key={link.to} {...link} count={count} pending={alertsLoading} />
           ))}
         </nav>
 
-        <div className="border-t border-rule-soft p-3">
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <Avatar name={user.name} />
+        <div className="border-t border-white/10 p-3">
+          <div className="flex items-center gap-2.5 rounded-lg bg-white/5 px-2.5 py-2">
+            <Avatar name={user.name} onRail />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium leading-tight">{user.name}</p>
-              <p className="text-xs text-faint">{isFrontDesk ? 'Front desk' : 'Provider'}</p>
+              <p className="text-[11px] text-white/45">{isFrontDesk ? 'Front desk' : 'Provider'}</p>
             </div>
           </div>
           <button
             onClick={signOut}
-            className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm
-                       text-muted transition-colors hover:bg-paper hover:text-ink"
+            className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm
+                       text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             <LogOut size={15} strokeWidth={1.75} />
             Sign out
@@ -65,29 +65,29 @@ export function Layout() {
         </div>
       </aside>
 
-      <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 border-b border-rule bg-surface/90 backdrop-blur lg:hidden">
+      <div className="lg:pl-64">
+        <header className="rail sticky top-0 z-20 text-white lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-2.5">
             <Brand compact />
             <div className="flex items-center gap-2">
-              <Avatar name={user.name} />
+              <Avatar name={user.name} onRail />
               <button
                 onClick={signOut}
-                className="rounded-md p-2 text-muted transition-colors hover:bg-paper hover:text-ink"
+                className="rounded-md p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                 aria-label="Sign out"
               >
                 <LogOut size={15} strokeWidth={1.75} />
               </button>
             </div>
           </div>
-          <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
+          <nav className="flex gap-1 overflow-x-auto px-3 pb-2.5">
             {links.map((link) => (
               <NavItem key={link.to} {...link} count={count} pending={alertsLoading} compact />
             ))}
           </nav>
         </header>
 
-        <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
+        <main className="px-4 py-6 sm:px-6 lg:px-9 lg:py-9">
           <div key={location.pathname} className="animate-rise">
             <Outlet />
           </div>
@@ -101,11 +101,11 @@ function Brand({ compact = false }) {
   return (
     <NavLink
       to="/"
-      className={`flex items-center gap-2.5 ${compact ? '' : 'border-b border-rule-soft px-5 py-4'}`}
+      className={`flex items-center gap-2.5 ${compact ? '' : 'border-b border-white/10 px-5 py-4'}`}
     >
       <span
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent
-                   text-sm font-semibold text-white shadow-card"
+        className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/15
+                   text-sm font-semibold text-white ring-1 ring-white/20"
         aria-hidden
       >
         R
@@ -114,7 +114,7 @@ function Brand({ compact = false }) {
         <span className="block truncate text-sm font-semibold leading-tight tracking-tight">
           Riverside Clinic
         </span>
-        <span className="tabular block text-[10px] uppercase tracking-[0.16em] text-faint">
+        <span className="tabular block text-[10px] uppercase tracking-[0.16em] text-white/45">
           Scheduling
         </span>
       </span>
@@ -122,7 +122,7 @@ function Brand({ compact = false }) {
   );
 }
 
-function Avatar({ name }) {
+export function Avatar({ name, onRail = false, size = 'md' }) {
   const initials = name
     .split(' ')
     .filter(Boolean)
@@ -134,8 +134,9 @@ function Avatar({ name }) {
   return (
     <span
       aria-hidden
-      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft
-                 text-xs font-semibold text-accent"
+      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
+        size === 'sm' ? 'size-6 text-[10px]' : 'size-8 text-xs'
+      } ${onRail ? 'bg-white/15 text-white' : 'bg-accent-soft text-accent'}`}
     >
       {initials}
     </span>
@@ -152,12 +153,12 @@ function NavItem({
       to={to}
       end={end}
       className={({ isActive }) =>
-        `group relative flex items-center gap-2.5 rounded-md text-sm transition-colors ${
+        `group relative flex items-center gap-2.5 rounded-lg text-sm transition-colors ${
           compact ? 'shrink-0 px-2.5 py-1.5' : 'px-3 py-2'
         } ${
           isActive
-            ? 'bg-accent-soft font-medium text-accent'
-            : 'text-muted hover:bg-paper hover:text-ink'
+            ? 'bg-white/15 font-medium text-white'
+            : 'text-white/60 hover:bg-white/8 hover:text-white'
         }`
       }
     >
@@ -166,12 +167,12 @@ function NavItem({
           {isActive && !compact && (
             <span
               aria-hidden
-              className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+              className="absolute inset-y-2 -left-3 w-1 rounded-r-full bg-white"
             />
           )}
           <Icon size={16} strokeWidth={1.75} className="shrink-0" />
           <span className="whitespace-nowrap">{label}</span>
-          {alerts && pending && <Spinner size={12} className="ml-auto text-faint" />}
+          {alerts && pending && <Spinner size={12} className="ml-auto text-white/50" />}
           {badge > 0 && !pending && (
             <span
               aria-label={`${badge} unconfirmed`}
