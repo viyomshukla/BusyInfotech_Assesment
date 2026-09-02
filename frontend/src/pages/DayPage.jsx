@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Columns3, Download, List, Plus,
+  CalendarDays, ChevronLeft, ChevronRight, Columns3, Download, List, Plus, UserPlus,
 } from 'lucide-react';
 import { addDays, isSameDay, parseISO } from 'date-fns';
 import { api } from '../lib/api';
@@ -215,6 +215,7 @@ export default function DayPage() {
         ) : view === 'timeline' ? (
           <Timeline
             columns={columns}
+            userId={user._id}
             startHour={startHour}
             endHour={endHour}
             showNow={isToday}
@@ -223,7 +224,11 @@ export default function DayPage() {
             onOpen={(id) => navigate(`/appointments/${id}`)}
           />
         ) : (
-          <AgendaList appointments={data} onOpen={(id) => navigate(`/appointments/${id}`)} />
+          <AgendaList
+            appointments={data}
+            userId={user._id}
+            onOpen={(id) => navigate(`/appointments/${id}`)}
+          />
         )}
       </Panel>
 
@@ -238,6 +243,77 @@ export default function DayPage() {
         providers={isFrontDesk ? providers : providers.filter((p) => p._id === user._id)}
       />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Care team
+
+// A slot carries the provider whose column it sits in, and sometimes a second
+// provider brought in to support the visit. That second name belongs on the day
+// sheet: whoever reads the sheet needs to know the room is double-covered
+// without opening the appointment to find out.
+function supporting(appt, userId) {
+  const team = appt.careTeam ?? [];
+  if (!team.length) return null;
+
+  const names = team.map((m) => m.providerName ?? 'Another provider');
+  const youSupport = team.some((m) => String(m.providerId) === String(userId));
+  const others = team
+    .filter((m) => String(m.providerId) !== String(userId))
+    .map((m) => m.providerName ?? 'Another provider');
+
+  if (youSupport) {
+    return {
+      you: true,
+      short: others.length ? `You + ${others.join(', ')} supporting` : 'You are supporting',
+      full: `You are on the care team for ${appt.patientName ?? 'this slot'}, supporting ${appt.providerName}.`,
+    };
+  }
+
+  return {
+    you: false,
+    short: `${names.join(', ')} supporting`,
+    full: `${names.join(', ')} ${names.length > 1 ? 'have' : 'has'} been added as a supporting doctor for ${appt.patientName ?? 'this slot'}, alongside ${appt.providerName}.`,
+  };
+}
+
+// The same fact in the two shapes the day sheet needs it: a line of text under
+// a patient's name, and a corner marker on a block too short to carry one.
+function SupportNote({ note, compact = false, bare = false }) {
+  if (!note) return null;
+
+  // Inside a slot block there is no room for a pill — the line has to be the
+  // text itself, carried by colour and the icon alone.
+  if (bare) {
+    return (
+      <span
+        title={note.full}
+        className={`flex min-w-0 items-center gap-0.5 text-[9px] font-medium leading-tight ${
+          note.you ? 'text-status-checkedin' : 'text-accent'
+        }`}
+      >
+        <UserPlus size={9} strokeWidth={2.5} className="shrink-0" />
+        <span className="truncate">{note.short}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title={note.full}
+      className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border
+                  px-1.5 py-px font-medium leading-tight ${
+                    compact ? 'text-[10px]' : 'text-[11px]'
+                  } ${
+                    note.you
+                      ? 'border-status-checkedin/35 bg-status-checkedin/10 text-status-checkedin'
+                      : 'border-accent/30 bg-accent-soft text-accent'
+                  }`}
+    >
+      <UserPlus size={compact ? 9 : 11} strokeWidth={2.25} className="shrink-0" />
+      <span className="truncate">{note.short}</span>
+    </span>
   );
 }
 
@@ -315,6 +391,13 @@ function Legend({ appointments }) {
           {STATUS_LABEL[status] ?? status}
         </span>
       ))}
+
+      {appointments.some((a) => a.careTeam?.length) && (
+        <span className="inline-flex items-center gap-1.5 text-accent">
+          <UserPlus size={12} strokeWidth={2} aria-hidden />
+          A second doctor is supporting this slot
+        </span>
+      )}
     </div>
   );
 }
@@ -380,7 +463,7 @@ function packLanes(appointments) {
   return placed;
 }
 
-function Timeline({ columns, startHour, endHour, showNow, canCreate, onCreate, onOpen }) {
+function Timeline({ columns, userId, startHour, endHour, showNow, canCreate, onCreate, onOpen }) {
   const [now, setNow] = useState(() => new Date());
 
   // The line marking the present has to move on its own, or it quietly becomes
@@ -432,6 +515,7 @@ function Timeline({ columns, startHour, endHour, showNow, canCreate, onCreate, o
           <TimelineColumn
             key={column.id}
             column={column}
+            userId={userId}
             startHour={startHour}
             rowHeight={rowHeight}
             gridHeight={gridHeight}
@@ -447,7 +531,7 @@ function Timeline({ columns, startHour, endHour, showNow, canCreate, onCreate, o
 }
 
 function TimelineColumn({
-  column, startHour, rowHeight, gridHeight, nowOffset, canCreate, onCreate, onOpen,
+  column, userId, startHour, rowHeight, gridHeight, nowOffset, canCreate, onCreate, onOpen,
 }) {
   const placed = useMemo(() => packLanes(column.appts), [column.appts]);
   const booked = column.appts.filter((a) => BOOKED.has(a.status)).length;
@@ -505,6 +589,7 @@ function TimelineColumn({
           <SlotBlock
             key={appt._id}
             appt={appt}
+            userId={userId}
             startHour={startHour}
             lane={lane}
             lanes={lanes}
@@ -516,7 +601,7 @@ function TimelineColumn({
   );
 }
 
-function SlotBlock({ appt, startHour, lane, lanes, onOpen }) {
+function SlotBlock({ appt, userId, startHour, lane, lanes, onOpen }) {
   const start = new Date(appt.startsAt);
   const minutesFromTop = (start.getHours() - startHour) * 60 + start.getMinutes();
   if (minutesFromTop < 0) return null;
@@ -526,6 +611,10 @@ function SlotBlock({ appt, startHour, lane, lanes, onOpen }) {
   const width = 100 / lanes;
   const isOpen = appt.status === 'OPEN';
   const dropped = appt.status === 'CANCELLED' || appt.status === 'NO_SHOW';
+  const support = supporting(appt, userId);
+  // A half-hour block is 48px: enough for the time, the patient and one more
+  // line, which is where the supporting doctor's name goes.
+  const roomForSupport = height >= 44;
 
   return (
     <button
@@ -545,6 +634,19 @@ function SlotBlock({ appt, startHour, lane, lanes, onOpen }) {
                     dropped ? 'opacity-70' : ''
                   }`}
     >
+      {/* On a block too short for even one more line the care team still has
+          to register, so it falls back to a marker in the corner. */}
+      {support && !roomForSupport && (
+        <span
+          title={support.full}
+          aria-label={support.full}
+          className={`absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full
+                      text-white ${support.you ? 'bg-status-checkedin' : 'bg-accent'}`}
+        >
+          <UserPlus size={8} strokeWidth={2.5} />
+        </span>
+      )}
+
       <p className="tabular truncate text-[10px] leading-tight opacity-70">
         {time(appt.startsAt)}
         {height > 40 && appt.endsAt ? `–${time(appt.endsAt)}` : ''}
@@ -556,7 +658,13 @@ function SlotBlock({ appt, startHour, lane, lanes, onOpen }) {
       >
         {appt.patientName ?? 'Open'}
       </p>
-      {height > 62 && (
+
+      {support && roomForSupport && <SupportNote note={support} bare />}
+
+      {/* The badge is the first thing to go when the block is short, and a
+          slot carrying a support line needs one more row's worth of height
+          before it can carry a badge as well. */}
+      {height > (support && roomForSupport ? 74 : 62) && (
         <div className="mt-1">
           <StatusBadge status={appt.status} />
         </div>
@@ -568,7 +676,7 @@ function SlotBlock({ appt, startHour, lane, lanes, onOpen }) {
 // ---------------------------------------------------------------------------
 // List
 
-function AgendaList({ appointments, onOpen }) {
+function AgendaList({ appointments, userId, onOpen }) {
   // Grouped by the hour so a long day reads as blocks of work rather than one
   // undifferentiated column of times.
   const groups = useMemo(() => {
@@ -613,7 +721,10 @@ function AgendaList({ appointments, onOpen }) {
                     <span className="block truncate text-sm font-medium">
                       {appt.patientName ?? <span className="font-normal text-muted">Open slot</span>}
                     </span>
-                    <span className="block truncate text-xs text-muted">{appt.providerName}</span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-xs text-muted">{appt.providerName}</span>
+                      <SupportNote note={supporting(appt, userId)} />
+                    </span>
                   </span>
                   <StatusBadge status={appt.status} />
                   <ChevronRight size={15} strokeWidth={1.75} className="shrink-0 text-faint" />

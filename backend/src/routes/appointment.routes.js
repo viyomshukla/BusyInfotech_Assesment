@@ -64,11 +64,24 @@ const updateSchema = z
     message: 'Provide startsAt or durationMin',
   });
 
+// A phone number is optional, but a half-typed one is worse than none: it
+// looks like a way to reach the patient right up until someone tries. Spaces
+// and hyphens are how people write a number down, so they are dropped rather
+// than rejected, and what is left has to be exactly ten digits.
+export const phoneField = z
+  .string()
+  .transform((value) => value.replace(/[\s-]/g, ''))
+  .refine((value) => value === '' || /^\d{10}$/.test(value), {
+    message: 'A phone number must be exactly 10 digits.',
+  })
+  .transform((value) => (value === '' ? undefined : value))
+  .optional();
+
 const bookSchema = z
   .object({
     patientId: objectId.optional(),
     patientName: z.string().min(1).optional(),
-    phone: z.string().optional(),
+    phone: phoneField,
   })
   .refine((v) => v.patientId || v.patientName, {
     message: 'Provide patientId or patientName',
@@ -134,7 +147,7 @@ router.get('/', async (req, res) => {
   res.json(await service.listAppointments(parsed.data, req.user));
 });
 router.get('/:id', async (req, res) => {
-  const appt = await Appointment.findById(req.params.id);
+  const appt = await Appointment.findById(req.params.id).lean();
   if (!appt) return res.status(404).json({ error: 'Appointment not found.' });
   if (req.user.role === 'PROVIDER') {
     const mine =
@@ -150,6 +163,7 @@ router.get('/:id', async (req, res) => {
   const [timeline, notes] = await Promise.all([
     AppointmentEvent.find({ appointmentId: appt._id }).sort({ createdAt: 1 }),
     VisitNote.find({ appointmentId: appt._id }).sort({ createdAt: 1 }),
+    service.attachCareTeamNames(appt),
   ]);
 
   res.json({ appointment: appt, timeline, notes });
@@ -190,6 +204,7 @@ router.get('/export/day', async (req, res) => {
     { label: 'Duration (min)', value: (r) => r.durationMin },
     { label: 'Provider', value: (r) => r.providerName },
     { label: 'Patient', value: (r) => r.patientName ?? '' },
+    { label: 'Supporting', value: (r) => (r.careTeam ?? []).map((m) => m.providerName).join('; ') },
     { label: 'Status', value: (r) => r.status },
     { label: 'Cancel reason', value: (r) => r.cancelReason ?? '' },
   ]);

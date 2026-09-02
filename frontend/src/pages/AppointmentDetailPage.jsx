@@ -234,7 +234,11 @@ export default function AppointmentDetailPage() {
               <li key={member.providerId} className="flex items-center justify-between gap-3 px-5 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm">
-                    {providers.find((p) => p._id === member.providerId)?.name ?? 'Provider'}
+                    {/* The API names the care team now; the roster is only a
+                        fallback for a response cached before it did. */}
+                    {member.providerName ??
+                      providers.find((p) => p._id === member.providerId)?.name ??
+                      'Provider'}
                   </p>
                   <p className="text-xs text-muted">Supporting</p>
                 </div>
@@ -349,9 +353,24 @@ export default function AppointmentDetailPage() {
   );
 }
 
+// A number is written down with spaces or hyphens as often as not, so the form
+// reads through them and judges the digits — the same rule the API applies.
+function phoneDigits(value) {
+  return value.replace(/[\s-]/g, '');
+}
+
 function BookModal({ open, onClose, onSubmit, busy }) {
   const [patientName, setPatientName] = useState('');
   const [phone, setPhone] = useState('');
+
+  const digits = phoneDigits(phone);
+  const phoneError = !digits
+    ? null
+    : !/^\d*$/.test(digits)
+      ? 'A phone number can only contain digits.'
+      : digits.length !== 10
+        ? `A phone number must be exactly 10 digits — this one has ${digits.length}.`
+        : null;
 
   function close() {
     setPatientName('');
@@ -365,7 +384,8 @@ function BookModal({ open, onClose, onSubmit, busy }) {
         className="space-y-4 p-5"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit({ patientName: patientName.trim(), phone: phone.trim() || undefined }, close);
+          if (phoneError) return;
+          onSubmit({ patientName: patientName.trim(), phone: digits || undefined }, close);
         }}
       >
         <Field label="Patient name">
@@ -376,15 +396,32 @@ function BookModal({ open, onClose, onSubmit, busy }) {
             required
           />
         </Field>
-        <Field label="Phone" hint="Optional — kept on the patient record.">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07700 900000" />
+        <Field
+          label="Phone"
+          hint="Optional — 10 digits if you give one."
+          error={phoneError}
+        >
+          <Input
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            aria-invalid={phoneError ? true : undefined}
+            placeholder="9876543210"
+          />
         </Field>
         <p className="text-xs text-muted">
           Booking moves this slot to Requested. Confirm it here or from Alerts.
         </p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={close}>Cancel</Button>
-          <Button type="submit" size="sm" loading={busy} disabled={!patientName.trim()}>
+          <Button
+            type="submit"
+            size="sm"
+            loading={busy}
+            disabled={!patientName.trim() || Boolean(phoneError)}
+          >
             {busy ? 'Please wait…' : 'Book slot'}
           </Button>
         </div>

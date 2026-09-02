@@ -1,19 +1,28 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShieldCheck, Stethoscope } from 'lucide-react';
+import { Check, ShieldCheck, Stethoscope } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSlowRequest, COLD_START_HINT } from '../hooks/useSlowRequest';
 import { Button, Field, Input, ErrorNote } from '../components/ui';
+import logoMark from '../assets/logo-mark.png';
+import logoWordmark from '../assets/logo-wordmark.png';
 import dentistImg from '../assets/clinic/dentist.jpg';
 import gynoImg from '../assets/clinic/gyno.jpg';
 import physioImg from '../assets/clinic/physio.jpg';
 import surgeonImg from '../assets/clinic/surgeon.jpg';
 
-const DEMO = [
-  { label: 'Front desk', email: 'desk@clinic.test', icon: ShieldCheck },
-  { label: 'Dr Patel', email: 'drpatel@clinic.test', icon: Stethoscope },
-  { label: 'Dr Singh', email: 'drsingh@clinic.test', icon: Stethoscope },
-  { label: 'Dr Iyer', email: 'driyer@clinic.test', icon: Stethoscope },
+const DEMO_PASSWORD = 'password123';
+
+// The front desk and a doctor see two different applications — one runs the
+// whole clinic, the other only their own sheet — so the two are offered as two
+// different things here rather than as four identical tiles in a grid.
+const FRONT_DESK = { name: 'Front Desk', email: 'desk@clinic.test' };
+
+const DOCTORS = [
+  { name: 'Dr Patel', email: 'drpatel@clinic.test' },
+  { name: 'Dr Singh', email: 'drsingh@clinic.test' },
+  { name: 'Dr Iyer', email: 'driyer@clinic.test' },
+  { name: 'Dr Viyom Shukla', email: 'drviyom@clinic.test' },
 ];
 
 // The four practices whose day sheets share this schedule. The staggered
@@ -39,7 +48,7 @@ const CLINICS = [
   },
   {
     src: gynoImg,
-    name: 'gynecologist ',
+    name: 'Gynaecology',
     alt: 'Doctor going through notes with an expectant patient',
     offset: 'lg:translate-y-4',
   },
@@ -72,7 +81,7 @@ export default function LoginPage() {
 
   function fillDemo(demoEmail) {
     setEmail(demoEmail);
-    setPassword('password123');
+    setPassword(DEMO_PASSWORD);
     setError(null);
   }
 
@@ -90,10 +99,14 @@ export default function LoginPage() {
                      bg-white/5 blur-2xl"
         />
 
-        <div className="relative flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-white/15 text-sm font-semibold">
-            R
-          </span>
+        <div className="relative flex items-center gap-3.5">
+          <img
+            src={logoMark}
+            alt=""
+            width={44}
+            height={44}
+            className="size-11 rounded-xl bg-white object-contain p-1 ring-1 ring-white/25"
+          />
           <div>
             <p className="text-sm font-semibold leading-tight">Riverside Clinic</p>
             <p className="tabular text-[10px] uppercase tracking-[0.16em] text-white/55">
@@ -116,7 +129,7 @@ export default function LoginPage() {
               {[
                 'Recurring availability generated in one action',
                 'Every status change kept on a record nobody can rewrite',
-                'Unconfirmed appointments surfaced before they go quiet',
+                'The sheet refreshes itself as the clinic moves',
               ].map((line) => (
                 <li key={line} className="flex gap-3">
                   <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-white/40" />
@@ -164,19 +177,22 @@ export default function LoginPage() {
         <p className="relative text-xs text-white/40">Staff access only.</p>
       </section>
 
-      <section className="flex min-h-screen items-center justify-center px-5 py-12 lg:min-h-0">
+      <section className="flex min-h-screen items-center justify-center px-5 py-10 lg:min-h-0 lg:py-12">
         <div className="w-full max-w-sm">
-          <div className="mb-7 lg:hidden">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white">
-                R
-              </span>
-              <span className="text-sm font-semibold">Riverside Clinic</span>
-            </div>
-
-            {/* Narrow screens drop the mosaic, so the practices come through as
-                a row of overlapping thumbnails instead. */}
-            <div className="mt-5 flex items-center gap-3">
+          {/* Narrow screens drop the whole left panel, so the identity has to be
+              carried here instead — the full lockup, at a size worth showing. */}
+          <div className="mb-6 lg:hidden">
+            {/* The lockup has no transparency, so it is given a tile of its
+                own rather than sitting as a white square on the paper. */}
+            <img
+              src={logoWordmark}
+              alt="Riverside Clinic"
+              width={132}
+              height={132}
+              className="mx-auto size-28 rounded-2xl border border-rule bg-white object-contain
+                         p-1.5 shadow-card"
+            />
+            <div className="mt-4 flex items-center justify-center gap-3">
               <div className="flex -space-x-2.5">
                 {CLINICS.map((clinic) => (
                   <img
@@ -184,7 +200,7 @@ export default function LoginPage() {
                     src={clinic.src}
                     alt={clinic.alt}
                     loading="lazy"
-                    className="size-10 rounded-full object-cover shadow-card ring-2 ring-paper"
+                    className="size-9 rounded-full object-cover shadow-card ring-2 ring-paper"
                   />
                 ))}
               </div>
@@ -192,73 +208,161 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
-          <p className="mt-1.5 text-sm text-muted">Use your clinic email address.</p>
+          <div className="rounded-2xl border border-rule bg-surface p-6 shadow-raise sm:p-7">
+            <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
+            <p className="mt-1.5 text-sm text-muted">Use your clinic email address.</p>
 
-          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-            <Field label="Email">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-                placeholder="you@clinic.test"
-              />
-            </Field>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="username"
+                  placeholder="you@clinic.test"
+                />
+              </Field>
 
-            <Field label="Password">
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                placeholder="••••••••"
-              />
-            </Field>
+              <Field label="Password">
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                />
+              </Field>
 
-            <ErrorNote>{error}</ErrorNote>
+              <ErrorNote>{error}</ErrorNote>
 
-            <Button type="submit" loading={busy} className="w-full">
-              {busy ? 'Please wait…' : 'Sign in'}
-            </Button>
+              <Button type="submit" loading={busy} className="w-full">
+                {busy ? 'Please wait…' : 'Sign in'}
+              </Button>
 
-            {slow && (
-              <p
-                role="status"
-                aria-live="polite"
-                className="animate-fade rounded-md border border-rule bg-accent-soft/60 px-3 py-2.5
-                           text-xs leading-relaxed text-muted"
-              >
-                {COLD_START_HINT}
-              </p>
-            )}
-          </form>
-
-          <div className="mt-9 border-t border-rule pt-5">
-            <p className="text-xs font-medium text-muted">Demo accounts</p>
-            <p className="mt-1 text-xs text-faint">
-              Every demo account uses the password = <span className="tabular">password123</span>.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {DEMO.map((d) => (
-                <button
-                  key={d.email}
-                  type="button"
-                  onClick={() => fillDemo(d.email)}
-                  className="flex items-center gap-2 rounded-md border border-rule bg-surface px-3 py-2
-                             text-left text-xs font-medium text-ink shadow-card transition-colors
-                             hover:border-accent hover:text-accent"
+              {slow && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="animate-fade rounded-md border border-rule bg-accent-soft/60 px-3 py-2.5
+                             text-xs leading-relaxed text-muted"
                 >
-                  <d.icon size={14} strokeWidth={1.75} className="shrink-0 text-faint" />
-                  <span className="truncate">{d.label}</span>
-                </button>
-              ))}
-            </div>
+                  {COLD_START_HINT}
+                </p>
+              )}
+            </form>
           </div>
+
+          <DemoAccounts selected={email} onPick={fillDemo} />
         </div>
       </section>
     </div>
   );
+}
+
+// The two roles are laid out as two separate things on purpose: one reception
+// account that runs the clinic, then the doctors who each only see their own
+// work. A uniform grid of four buttons hides that difference completely.
+function DemoAccounts({ selected, onPick }) {
+  return (
+    <div className="mt-5 rounded-2xl border border-rule bg-surface/60 p-5 shadow-card">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-xs font-semibold text-ink">Demo accounts</p>
+        <p className="text-[11px] text-faint">
+          password <span className="tabular text-muted">{DEMO_PASSWORD}</span>
+        </p>
+      </div>
+
+      <GroupLabel icon={ShieldCheck}>Reception</GroupLabel>
+
+      <button
+        type="button"
+        onClick={() => onPick(FRONT_DESK.email)}
+        aria-pressed={selected === FRONT_DESK.email}
+        className={`mt-2 flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left
+                    transition-colors ${
+                      selected === FRONT_DESK.email
+                        ? 'border-accent bg-accent-soft ring-2 ring-accent/20'
+                        : 'border-accent/25 bg-accent-soft/60 hover:border-accent hover:bg-accent-soft'
+                    }`}
+      >
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-white shadow-card">
+          <ShieldCheck size={17} strokeWidth={1.9} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold leading-tight text-accent-deep">
+            {FRONT_DESK.name}
+          </span>
+          <span className="tabular mt-0.5 block truncate text-[11px] text-accent">
+            {FRONT_DESK.email}
+          </span>
+        </span>
+        <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+          Whole clinic
+        </span>
+      </button>
+
+      <GroupLabel icon={Stethoscope}>Doctors</GroupLabel>
+
+      <ul className="mt-2 space-y-1.5">
+        {DOCTORS.map((doctor) => {
+          const active = selected === doctor.email;
+          return (
+            <li key={doctor.email}>
+              <button
+                type="button"
+                onClick={() => onPick(doctor.email)}
+                aria-pressed={active}
+                className={`flex w-full items-center gap-2.5 rounded-lg border bg-surface px-3 py-2
+                            text-left shadow-card transition-colors ${
+                              active
+                                ? 'border-accent ring-2 ring-accent/15'
+                                : 'border-rule hover:border-accent'
+                            }`}
+              >
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[10px] font-semibold text-accent">
+                  {initials(doctor.name)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium leading-tight text-ink">
+                    {doctor.name}
+                  </span>
+                  <span className="tabular block truncate text-[10px] text-faint">
+                    {doctor.email}
+                  </span>
+                </span>
+                {active ? (
+                  <Check size={14} strokeWidth={2.5} className="shrink-0 text-accent" />
+                ) : (
+                  <span className="shrink-0 text-[10px] text-faint">Own sheet</span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function GroupLabel({ icon: Icon, children }) {
+  return (
+    <p className="mt-4 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-faint">
+      <Icon size={12} strokeWidth={2} aria-hidden />
+      {children}
+      <span aria-hidden className="h-px flex-1 bg-rule" />
+    </p>
+  );
+}
+
+function initials(name) {
+  return name
+    .replace(/^Dr\s+/i, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }

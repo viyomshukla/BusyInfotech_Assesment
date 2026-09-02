@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAlerts } from '../hooks/useAlerts';
+import logoMark from '../assets/logo-mark.png';
 import { Spinner } from './ui';
 
 const LINKS = [
@@ -103,13 +104,13 @@ function Brand({ compact = false }) {
       to="/"
       className={`flex items-center gap-2.5 ${compact ? '' : 'border-b border-white/10 px-5 py-4'}`}
     >
-      <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/15
-                   text-sm font-semibold text-white ring-1 ring-white/20"
-        aria-hidden
-      >
-        R
-      </span>
+      <img
+        src={logoMark}
+        alt=""
+        width={36}
+        height={36}
+        className="size-9 shrink-0 rounded-xl bg-white object-contain p-0.5 ring-1 ring-white/25"
+      />
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold leading-tight tracking-tight">
           Riverside Clinic

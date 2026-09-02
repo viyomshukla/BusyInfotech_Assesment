@@ -14,6 +14,33 @@ function assertCanManage(user, providerId, action) {
   throw new RuleError(`Providers can only ${action} on their own schedule.`, 403);
 }
 
+// The care team is stored as ids alone, which is right for the record but
+// useless to a day sheet that has to print "supported by Dr Shukla" next to a
+// patient. Names are resolved in one lookup per response rather than a populate
+// per row — a full day is a few dozen appointments across a handful of staff.
+export async function attachCareTeamNames(docs) {
+  const list = Array.isArray(docs) ? docs : [docs];
+
+  const ids = new Set();
+  for (const appt of list) {
+    for (const member of appt?.careTeam ?? []) ids.add(member.providerId.toString());
+  }
+  if (!ids.size) return docs;
+
+  const users = await User.find({ _id: { $in: [...ids] } }).select('name').lean();
+  const byId = new Map(users.map((u) => [u._id.toString(), u.name]));
+
+  for (const appt of list) {
+    if (!appt?.careTeam?.length) continue;
+    appt.careTeam = appt.careTeam.map((member) => ({
+      ...member,
+      providerName: byId.get(member.providerId.toString()) ?? 'Former staff member',
+    }));
+  }
+
+  return docs;
+}
+
 const SORT_FIELDS = {
   date: 'startsAt',
   status: 'status',
@@ -72,6 +99,8 @@ export async function listAppointments(query, actor) {
     Appointment.find(filter).sort(sortSpec).skip(skip).limit(limit).lean(),
     Appointment.countDocuments(filter),
   ]);
+
+  await attachCareTeamNames(items);
 
   return {
     items,
@@ -210,7 +239,8 @@ export async function getDaySchedule(dateStr, providerId, actor) {
     filter.providerId = providerId;
   }
 
-  return Appointment.find(filter).sort({ startsAt: 1, providerName: 1 }).lean();
+  const rows = await Appointment.find(filter).sort({ startsAt: 1, providerName: 1 }).lean();
+  return attachCareTeamNames(rows);
 }
 async function withTransaction(fn) {
   const session = await mongoose.startSession();

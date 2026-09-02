@@ -22,9 +22,24 @@ const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const StaffPage = lazy(() => import('./pages/StaffPage'));
 
+// Two people work this schedule at once: the front desk checks a patient in
+// while the provider has the same day sheet open on another screen. Waiting for
+// someone to press reload is how the two screens end up disagreeing, so every
+// query refreshes on a short interval, on window focus, and when the network
+// comes back. The interval stops while the tab is hidden — nobody needs a
+// background tab burning requests — and the queries pick up again on focus.
+const LIVE_INTERVAL_MS = 15_000;
+
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 },
+    queries: {
+      retry: 1,
+      staleTime: 10_000,
+      refetchInterval: LIVE_INTERVAL_MS,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+    },
   },
 });
 

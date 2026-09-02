@@ -157,12 +157,19 @@ Created by `npm run seed`. Every account uses the password `password123`.
 | `drpatel@clinic.test` | Provider |
 | `drsingh@clinic.test` | Provider |
 | `driyer@clinic.test` | Provider |
+| `drviyom@clinic.test` | Provider |
 
-The seed builds roughly five weeks of appointments (21 days back, 14 forward) at
-six slots a day across three providers, with a realistic status mix — past slots
-resolve to completed or no-show, future ones stay open or confirmed. It also
-plants four unconfirmed appointments starting 40 minutes, 50 minutes, 5 hours,
-and 20 hours out, so the alerts view has both urgent and ordinary rows.
+The seed builds the diary from 21 days back through to 30 September, ten slots a
+day on a weekday and six on a Saturday, across all four providers — roughly
+1,500 appointments over 40 patients. The status mix is realistic: past slots
+resolve to completed or no-show, today's sheet spreads across the workflow, and
+future ones stay open, requested or confirmed. Around one booked appointment in
+five carries a second doctor on the care team, which is what the day sheet
+prints under the patient's name. It also plants six unconfirmed appointments
+between 40 minutes and 22 hours out, so the alerts view has both urgent and
+ordinary rows.
+
+The sequence is seeded from a fixed number, so two runs produce the same clinic.
 
 ---
 
@@ -178,6 +185,16 @@ leak through a response. `checkPassword` wraps the bcrypt compare.
 
 `name`, `phone`, `email`. Created on the fly when the front desk books a slot
 for a walk-in name rather than an existing record.
+
+`phone` is optional, but a half-typed number is worse than none — it looks like
+a way to reach the patient right up until someone tries. So a number, if given,
+has to be exactly ten digits. Spaces and hyphens are how people write a number
+down, so the API strips them and judges what is left; `98765 43210` and
+`98765-43210` are both accepted and both stored as `9876543210`. Anything
+shorter, longer, or carrying other characters is rejected with
+**A phone number must be exactly 10 digits.** The rule lives in the route's Zod
+schema, with a validator on the model behind it, and the booking form applies
+the same test as you type so the error arrives before the request does.
 
 ### `Appointment`
 
@@ -281,6 +298,7 @@ gates by role.
 | Change status | ✅ | ✅ own schedule only |
 | Bulk-generate availability | ✅ | ❌ |
 | Reassign to another provider | ✅ | ❌ |
+| Confirm / cancel from the alerts feed | ✅ | ✅ own schedule only |
 | Dismiss alerts | ✅ | ❌ (can still see their own) |
 | Write / edit visit notes | ❌ | ✅ own notes only |
 | Manage the care team | ✅ | ✅ own appointments |
@@ -310,9 +328,15 @@ the next 24 hours. The rules:
   the appointment enters that final hour, flagged `reappeared: true`. Something
   waved off yesterday shouldn't stay quiet 20 minutes before the patient is due.
 
-Providers see only their own alerts; only the front desk can dismiss. The
-frontend polls the feed every 60 seconds and shows the count as a badge in the
-sidebar.
+A provider's feed carries the appointments they run *and* the ones they only
+support, because both are on their day. **Confirm** and **Cancel** are offered
+on the ones they run — the same rule the API enforces — and a supported row says
+whose appointment it is instead of showing buttons it would be refused. Cancel
+asks for a reason, which the record keeps. **Dismiss** only silences the alert
+without settling the appointment, so it stays a front-desk action.
+
+The frontend polls the feed every 60 seconds and shows the count as a badge in
+the sidebar.
 
 ---
 
@@ -345,7 +369,7 @@ Base URL: `${VITE_API_URL}/api`. All routes except `/auth/login`,
 | `GET` | `/:id` | `{ appointment, timeline, notes }`. 403 if a provider asks for an appointment that isn't theirs. |
 | `POST` | `/` | Create one slot: `{ providerId, startsAt, durationMin (5–480) }`. 409 on overlap. |
 | `PATCH` | `/:id` | Move or resize a slot: `{ startsAt?, durationMin? }`. Only while `OPEN`. |
-| `POST` | `/:id/book` | `{ patientId }` or `{ patientName, phone? }` — creates the patient if needed. Moves `OPEN → REQUESTED`. |
+| `POST` | `/:id/book` | `{ patientId }` or `{ patientName, phone? }` — creates the patient if needed; `phone` must be exactly 10 digits when given. Moves `OPEN → REQUESTED`. |
 | `POST` | `/:id/status` | `{ to, reason? }`. Reason mandatory for `CANCELLED`. |
 | `POST` | `/:id/reassign` | `{ providerId }`. Front desk only; 409 if the target provider is busy then. |
 | `POST` | `/:id/archive` · `/:id/restore` | Soft delete and undo. |
@@ -427,7 +451,7 @@ directly — the API's wording is the wording the user sees.
 | `/day` | Day sheet — a time grid across providers, with prev/next day, a new-slot modal, and CSV export | all |
 | `/appointments` | Filterable list; every filter lives in the URL, so views are shareable and survive a refresh | all |
 | `/appointments/:id` | Detail — status actions, booking, reschedule, cancel-with-reason, care team, reassign, notes, and the full audit timeline | all |
-| `/alerts` | Urgent and upcoming unconfirmed appointments, with confirm and dismiss | all |
+| `/alerts` | Urgent and upcoming unconfirmed appointments, with confirm, cancel and dismiss | all |
 | `/availability` | Bulk slot generator with a created/skipped report | front desk |
 | `/staff` | Staff directory and the add-provider form | front desk |
 
@@ -441,11 +465,18 @@ directly — the API's wording is the wording the user sees.
 - `ProtectedRoute` renders a loading state while that resolves, redirects to
   `/login` with the attempted location in router state, and shows a polite
   "front desk only" panel rather than a hard redirect when the role is wrong.
-- TanStack Query is configured once with `retry: 1`, `staleTime: 30s`, and no
-  refetch on window focus. `useAppointmentMutation` invalidates the
-  `appointment`, `appointments`, `dashboard`, and `alerts` keys on every
-  success, so a status change updates the sidebar badge and the dashboard
-  without any manual wiring.
+- **The board keeps itself current.** Two people work this schedule at once —
+  the front desk checks a patient in while the provider has the same day sheet
+  open on another screen — so TanStack Query is configured once with
+  `refetchInterval: 15s`, `staleTime: 10s`, and refetch on window focus and on
+  reconnect. The interval is suspended while the tab is hidden and resumes on
+  focus, and `useProviders` opts out of it because the roster does not change
+  every fifteen seconds. None of this is announced in the interface — refreshing
+  is the app's job, not something to ask the reader to keep an eye on, so the
+  only sign of it is the existing hairline progress bar.
+  `useAppointmentMutation` still invalidates the `appointment`,
+  `appointments`, `dashboard`, and `alerts` keys on every success, so a local
+  change lands immediately rather than waiting for the next poll.
 - `components/ui.jsx` is the whole design system — `Button`, `Panel`,
   `PageHeader`, `Field`, `Input`, `Textarea`, `Select`, `StatusBadge`,
   `EmptyState`, `Spinner`, `Loading`, `PageLoader`, `InlineLoading`,
