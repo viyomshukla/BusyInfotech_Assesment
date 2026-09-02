@@ -51,7 +51,28 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Server error' });
+
+  // A malformed id in the path is a bad request, not a broken server. Left
+  // alone, Mongoose's own message comes back with a 500 and names the model and
+  // the field it failed on, which is nobody's business outside this process.
+  if (err.name === 'CastError') {
+    return res.status(400).json({ error: 'That is not a valid id.' });
+  }
+
+  // A model-level validator that something reached without going through a
+  // route schema — the phone rule, for instance.
+  if (err.name === 'ValidationError') {
+    const first = Object.values(err.errors ?? {})[0];
+    return res.status(400).json({ error: first?.message ?? 'That data is not valid.' });
+  }
+
+  // Everything the app raises deliberately carries a status and a message meant
+  // to be read. Anything else is a surprise, and its message is for the log.
+  if (err.status) {
+    return res.status(err.status).json({ error: err.message });
+  }
+
+  res.status(500).json({ error: 'Something went wrong on our side.' });
 });
 
 export default app;
