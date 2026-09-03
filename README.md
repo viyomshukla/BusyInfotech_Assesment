@@ -1,9 +1,12 @@
 # Riverside Clinic — Scheduling
 
 A full-stack clinic scheduling application. The front desk publishes provider
-availability, books patients into it, and works a live queue of unconfirmed
-appointments; providers see only their own schedule and write visit notes on
-the visits they attend.
+availability, books patients into it, works a live queue of unconfirmed
+appointments, and keeps a waitlist for the days that are already full;
+providers see only their own schedule and write clinical notes on the visits
+they attend.
+
+The day itself prints on paper for the desk that still works off a clipboard.
 
 Every change to an appointment is written to an append-only event log, so the
 detail page can show exactly who did what and when.
@@ -28,6 +31,8 @@ Busy Infotech/
 - [The appointment status machine](#the-appointment-status-machine)
 - [Roles and permissions](#roles-and-permissions)
 - [Alerts](#alerts)
+- [The waitlist](#the-waitlist)
+- [The printed day sheet](#the-printed-day-sheet)
 - [API reference](#api-reference)
 - [Frontend tour](#frontend-tour)
 - [Design decisions worth knowing](#design-decisions-worth-knowing)
@@ -50,8 +55,12 @@ Busy Infotech/
   destination provider's calendar.
 - Work an alerts queue of appointments still unconfirmed within the next 24
   hours; confirm or dismiss each one.
+- Keep a **waitlist** for days that are already full, and place someone into a
+  slot the moment one frees up.
+- Record **billing notes** against a visit — a code, an amount, and what is
+  being charged for.
 - Add provider accounts. The clinic runs exactly one front-desk account.
-- Export any day's schedule as CSV.
+- Export any day's schedule as CSV, or **print it** as a working day sheet.
 
 **For providers**
 
@@ -59,14 +68,15 @@ Busy Infotech/
   of the care team — enforced server-side on every list, detail, dashboard, and
   export endpoint.
 - Move visits through check-in and completion, and mark no-shows.
-- Write visit notes (providers only) and edit the notes they authored.
+- Write clinical notes (providers only) and edit the notes they authored.
 - Add and remove supporting providers on their own appointments.
 
 **For both**
 
 - A dashboard with headline counts, a per-provider load bar chart, a status
   breakdown, and an 8-week no-show rate trend line.
-- A day sheet laid out as a time grid across providers.
+- A day sheet laid out as a time grid across providers, which opens on the
+  current hour and lays each visit out according to how long it runs.
 - A filterable, sortable, paginated appointment list with a patient-name search.
 - A full audit timeline on every appointment.
 
@@ -169,6 +179,23 @@ prints under the patient's name. It also plants six unconfirmed appointments
 between 40 minutes and 22 hours out, so the alerts view has both urgent and
 ordinary rows.
 
+**No provider is ever double-booked.** Every slot is half an hour, matching the
+grid of start times, and the six alert appointments cannot sit on that grid — an
+alert has to be a fixed number of minutes from whenever the seed is run, so they
+land on the quarter hours in between. A half-hour appointment at 14:15 runs
+straight through the 14:30 slot, which is a doctor seeing two patients at once.
+Where the two collide the grid gives way: the colliding slots are dropped, and a
+final pass over everything refuses to write at all if any provider is left with
+two appointments overlapping. `insertMany` never reaches the service layer's
+overlap check, and the unique index only catches two rows starting at the very
+same instant, so without that pass nothing would catch it.
+
+It also seeds **billing notes** on every third completed visit (not all of them,
+because the point of the split is that a visit can carry a clinical note, a
+billing note, or both), and **nine waitlist entries** — seven waiting, one
+already placed and one taken off the list, with their windows anchored to the
+day the seed runs so the queue is live whenever the demo is opened.
+
 The sequence is seeded from a fixed number, so two runs produce the same clinic.
 
 ---
@@ -236,8 +263,45 @@ Mongoose even by accident.
 
 ### `VisitNote`
 
-`appointmentId`, `authorId`, `authorName`, `body` (≤ 5000 chars). Only providers
-on the appointment can write one; only the author can edit it.
+`appointmentId`, `authorId`, `authorName`, `body` (≤ 5000 chars), plus a `kind`
+of `CLINICAL` or `BILLING` and, on billing notes only, an optional `code` and
+`amount`.
+
+Two different notes live on a visit, written by opposite ends of the clinic for
+two different readers. A clinical note is the provider's record of what happened;
+a billing note is the desk's record of what it costs. They share a collection
+because they share an author, a timestamp and an appointment — and they are split
+by `kind` everywhere they are read, so neither turns up where the other belongs.
+
+Who may write which follows the same logic: **clinical** notes are for providers
+on the appointment (scheduling or care team), **billing** notes are front desk
+only, and neither role can write in the other's column. Either way, only the
+author can edit their own note. A note written before the split existed has no
+`kind` and is read as clinical, because that is the only kind that existed when
+it was written.
+
+### `WaitlistEntry`
+
+Someone who wants a day that has nothing left on it. See
+[The waitlist](#the-waitlist) for how it is worked.
+
+| Field | Purpose |
+| --- | --- |
+| `patientName` / `phone` | Who to ring, and on what number. Same ten-digit rule as `Patient`. |
+| `providerId` / `providerName` | Who they asked for. Null means any provider will do, which is the answer that gets them seen soonest. |
+| `preferredFrom` / `preferredTo` | The window they can actually come in, stored as local day bounds so a slot anywhere on the last day still counts as inside it. |
+| `status` | `WAITING`, `PLACED` or `REMOVED`. |
+| `placedAppointmentId` / `placedAt` | The slot they were given, once they have one. |
+| `note` | Anything reception needs when they ring back. |
+| `addedById` / `addedByName` | Who took the call. |
+
+An entry holds **no `Patient` record**. A waitlist entry may never turn into a
+visit, and a list of half-patients created by hopeful phone calls is worse than
+no list — so the `Patient` is created at the moment of placement, by the same
+booking path as any other appointment.
+
+Indexed on `{ status, preferredFrom, preferredTo }` and `{ status, providerId }`,
+which are the two questions the day sheet asks of an open slot.
 
 ### `AlertDismissal`
 
@@ -300,7 +364,11 @@ gates by role.
 | Reassign to another provider | ✅ | ❌ |
 | Confirm / cancel from the alerts feed | ✅ | ✅ own schedule only |
 | Dismiss alerts | ✅ | ❌ (can still see their own) |
-| Write / edit visit notes | ❌ | ✅ own notes only |
+| Write clinical notes | ❌ | ✅ on appointments they run or support |
+| Write billing notes | ✅ | ❌ |
+| Edit a note | ✅ their own | ✅ their own |
+| Add to / place from / remove from the waitlist | ✅ | ❌ — no access at all |
+| Print a day sheet | ✅ any provider | ✅ their own day |
 | Manage the care team | ✅ | ✅ own appointments |
 | Add staff accounts | ✅ providers only | ❌ |
 | List all users | ✅ | ❌ (provider list only) |
@@ -340,6 +408,73 @@ the sidebar.
 
 ---
 
+## The waitlist
+
+Reception's answer to "there's nothing left on Thursday". The entry is a
+standing request, not a booking: it holds no time and blocks nothing, and it
+stays `WAITING` until a slot frees up and someone is placed into it.
+
+**Placing** is the point of the feature. Opening *Find a slot* on an entry lists
+every open slot inside the window that patient gave, with the provider they
+asked for if they named one, grouped by day. Choosing one books it through the
+ordinary `bookSlot` path — so the status machine, the `Patient` record and the
+audit trail all behave exactly as they do for a booking taken over the counter —
+and marks the entry `PLACED` against the appointment it produced.
+
+The rules the API enforces on a placement:
+
+- The slot must still be **open**, not archived, and not already taken by
+  someone else in the meantime (409).
+- The slot must be **inside the window** the patient gave, and with the provider
+  they asked for if they asked for one. The entry is a promise about when and
+  with whom; placing them outside it would be booking an appointment they never
+  agreed to.
+- **The slot must not have started yet.** Someone is being rung up and asked to
+  come in — a slot earlier today has gone. The list on screen only offers time
+  still to come, but a list is always a few seconds old, so the check is made
+  again at the moment it counts.
+
+The list is worked as a queue and numbered in the order the calls came in.
+Placement is deliberately **not automatic**: a person rings the patient and asks,
+and the software's job is to have the right names and the right slots side by
+side when they do.
+
+**The day sheet knows about it.** When people are waiting for the day being
+looked at, a banner names them and links through to the waitlist with that day
+already filtered — reception spots the gap on one page and the people who would
+take it are on another, and that is the bridge.
+
+One deliberate gap: the placement writes the booking and the entry separately,
+because booking runs in its own transaction. It fails in the safe direction — the
+entry stays `WAITING` next to a booking that plainly exists, which reads as work
+still to do. The reverse, an entry marked placed with nothing booked, would
+quietly drop a patient off the list.
+
+---
+
+## The printed day sheet
+
+`/day/print` renders the day as paper. It sits **outside the app shell** on
+purpose: the sidebar and the toolbar are not part of what goes on the clipboard,
+and the cleanest way to keep them off the page is not to render them. It is
+still behind the session — it is patient data.
+
+It is not a screenshot of the screen. The sheet carries a tick box per row for
+marking arrivals, a blank ruled column to write in, cancelled rows struck
+through with their reason so nobody wonders about the gap, and column headings
+that repeat at the top of every page. Print rules in `index.css` set A4 with
+proper margins, drop every shadow, and stop a row breaking across a page turn.
+The one piece of colour kept is the status rule down the edge of each row, which
+browsers would otherwise drop — `print-color-adjust: exact` insists on it.
+
+The Print button on the day sheet opens it in a new tab with the current date
+and provider filter, and fires the print dialog on arrival; opening the URL
+directly just shows the sheet. The underlying query opts out of the app-wide
+15-second refresh, because a sheet on a clipboard and a sheet in the print
+dialog disagreeing about the day would be worse than a slightly stale one.
+
+---
+
 ## API reference
 
 Base URL: `${VITE_API_URL}/api`. All routes except `/auth/login`,
@@ -373,8 +508,8 @@ Base URL: `${VITE_API_URL}/api`. All routes except `/auth/login`,
 | `POST` | `/:id/status` | `{ to, reason? }`. Reason mandatory for `CANCELLED`. |
 | `POST` | `/:id/reassign` | `{ providerId }`. Front desk only; 409 if the target provider is busy then. |
 | `POST` | `/:id/archive` · `/:id/restore` | Soft delete and undo. |
-| `POST` | `/:id/notes` | `{ body }` (1–5000 chars). Providers on the appointment only. |
-| `PATCH` | `/notes/:noteId` | `{ body }`. Author only. |
+| `POST` | `/:id/notes` | `{ body }` (1–5000 chars) plus `kind` (`CLINICAL`, the default, or `BILLING`) and, for billing only, `code?` and `amount?`. Clinical: providers on the appointment. Billing: front desk. A code or amount on a clinical note is a 400. |
+| `PATCH` | `/notes/:noteId` | `{ body, code?, amount? }`. Author only. The kind cannot be changed — it decided who was allowed to write the note in the first place. `code: ""` or `amount: null` clears the field rather than leaving it as it was. |
 | `POST` | `/:id/care-team` | `{ providerId }` — add a supporting provider. |
 | `DELETE` | `/:id/care-team/:providerId` | Remove one. |
 | `GET` | `/mine/schedule` | A provider's full schedule; `?archived=true` to include archived. |
@@ -399,6 +534,19 @@ the same run, then returns:
   }]
 }
 ```
+
+### Waitlist — `/api/waitlist`
+
+Front desk only, end to end — a provider gets 403 on every route here. The
+waitlist is a reception job from the call to the callback, and a provider has no
+action to take on it.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/` | `{ items, count }`, oldest first — the list is a queue. Query: `status` (`WAITING` default, `PLACED`, `REMOVED`, or `ALL`), `date` (entries whose window covers that day), `providerId` (entries asking for that provider **plus** the ones happy with anybody). |
+| `POST` | `/` | `{ patientName, phone?, providerId?, preferredFrom, preferredTo?, note? }`. Dates are `YYYY-MM-DD` and are stored as local day bounds; `preferredTo` defaults to `preferredFrom`. An empty string for provider means "no preference" and lands as null. |
+| `POST` | `/:id/place` | `{ appointmentId }` → `{ entry, appointment }`. Books the slot in that patient's name and marks the entry `PLACED`. 422 if the entry is not waiting, if the slot is outside their window or with the wrong provider, or if the slot has already started; 409 if someone else took the slot first. |
+| `DELETE` | `/:id` | Marks the entry `REMOVED`. Nothing is deleted — the list keeps its history. |
 
 ### Dashboard — `/api/dashboard`
 
@@ -448,10 +596,12 @@ directly — the API's wording is the wording the user sees.
 | --- | --- | --- |
 | `/login` | Split-screen sign-in with one-click demo credentials | public |
 | `/` | Dashboard — stat tiles, provider load, status mix, no-show trend | all |
-| `/day` | Day sheet — a time grid across providers, with prev/next day, a new-slot modal, and CSV export | all |
+| `/day` | Day sheet — a time grid across providers, with prev/next day, a new-slot modal, CSV export and Print | all |
+| `/day/print` | The printable day sheet, rendered outside the app shell | all |
 | `/appointments` | Filterable list; every filter lives in the URL, so views are shareable and survive a refresh | all |
-| `/appointments/:id` | Detail — status actions, booking, reschedule, cancel-with-reason, care team, reassign, notes, and the full audit timeline | all |
+| `/appointments/:id` | Detail — status actions, booking, reschedule, cancel-with-reason, care team, reassign, clinical/billing notes, and the full audit timeline | all |
 | `/alerts` | Urgent and upcoming unconfirmed appointments, with confirm, cancel and dismiss | all |
+| `/waitlist` | The queue, with add, find-a-slot and remove | front desk |
 | `/availability` | Bulk slot generator with a created/skipped report | front desk |
 | `/staff` | Staff directory and the add-provider form | front desk |
 
@@ -477,10 +627,29 @@ directly — the API's wording is the wording the user sees.
   `useAppointmentMutation` still invalidates the `appointment`,
   `appointments`, `dashboard`, and `alerts` keys on every success, so a local
   change lands immediately rather than waiting for the next poll.
+- **The day sheet opens where the day actually is.** Arriving at 12:43 on a grid
+  that starts at 08:00 meant scrolling past four hours of finished appointments
+  to find out what is happening now, so the grid anchors on the hour before the
+  current one — 11:00 at the top at 12:43 — leaving the morning a scroll
+  upwards. It anchors once per day rather than on every clock tick, because
+  re-running it would yank the grid out from under whoever is reading it, and a
+  **Now** button re-anchors on demand (smoothly, unless the browser asks for
+  reduced motion).
+- **A block says as much as it has room to say.** A fifteen-minute visit is not
+  a squashed thirty-minute one, so `blockTier()` picks one of four layouts by
+  height: a single line of `09:00  Jane Doe` under 34px, a stacked time and name
+  under 52px, one spare line for the supporting doctor under 74px, and the full
+  card with a status badge above that. On the short tier the
+  *time* gives up its width before the name does — the block already sits at its
+  own time on the grid, so the name is the fact worth keeping. Whatever a block
+  could not print is on its hover title. The grid draws at 2px per minute for
+  the same reason: at 1.6 a quarter-hour block was 24px tall, which was less
+  than the two lines inside it needed, and the patient's name was being clipped
+  off the bottom of every short appointment.
 - `components/ui.jsx` is the whole design system — `Button`, `Panel`,
-  `PageHeader`, `Field`, `Input`, `Textarea`, `Select`, `StatusBadge`,
-  `EmptyState`, `Spinner`, `Loading`, `PageLoader`, `InlineLoading`,
-  `ErrorNote`, `Modal`.
+  `PageHeader`, `Field`, `Input`, `Textarea`, `Select`, `SegmentedControl`,
+  `Stat`, `StatusBadge`, `EmptyState`, `Spinner`, `Loading`, `PageLoader`,
+  `InlineLoading`, `ErrorNote`, `Modal`.
 - **Waiting is always visible.** Every wait resolves to the same thing: a
   turning circle over **Please wait…** and a line saying what is being fetched.
   `PageLoader` covers the whole screen while the session is being checked,
@@ -493,7 +662,9 @@ directly — the API's wording is the wording the user sees.
 - **Routes are code-split.** Every page behind the session is a `lazy()` import
   behind a `Suspense` boundary that renders the same waiting state, so the
   charting library loads with the dashboard rather than with the login screen —
-  the initial bundle is 361 kB (116 kB gzipped) instead of 784 kB.
+  the initial bundle is 362 kB (116 kB gzipped) instead of 837 kB. The waitlist,
+  the printed sheet and every other page added since arrive the same way, which
+  is why that first number has not moved.
 - Tailwind v4 is configured entirely through `@theme` tokens in `index.css` —
   ink/muted/faint text, paper/surface grounds, a status colour per appointment
   state, three shadow levels, and Archivo + IBM Plex Mono. There is no
@@ -525,6 +696,28 @@ catches the race the query cannot see.
 sheets, and exports render without a join; reassignment updates both fields and
 records the before/after pair in the event detail.
 
+**The seed checks its own work.** A provider is one person in one room, so two
+of their appointments can never overlap. Nothing the seed writes goes through
+the service layer that normally enforces that, so it runs its own overlap pass
+over everything it is about to insert and throws rather than writing a clinic
+where a doctor sees two patients at once. The failure it exists to catch is a
+real one it used to produce — see [Demo accounts](#demo-accounts).
+
+**A waitlist entry creates no patient.** Most of them never become a visit, and a
+patient list full of half-records from hopeful phone calls is worse than no
+waitlist. The `Patient` is created at placement, by the ordinary booking path.
+
+**Time checks happen at the moment they count.** The waitlist only offers slots
+still to come, but the list on screen is always a few seconds old, so the API
+refuses a slot that has already started regardless of what the client asks for.
+That guard is on placement only — the front desk booking a walk-in against a
+slot that started five minutes ago is a real thing, and blocking it everywhere
+would break it.
+
+**The printed sheet is a different document, not the same one with CSS.** It has
+its own route outside the shell, its own layout, a tick box and a column to
+write in — because it is used differently from the screen it came from.
+
 **The audit log is structurally append-only** — enforced by schema hooks, not by
 convention.
 
@@ -553,7 +746,7 @@ it `req.secure` and `req.ip` would be wrong behind the proxy.
 | --- | --- |
 | `npm run dev` | nodemon on `src/server.js` |
 | `npm start` | plain node — the production entry point |
-| `npm run seed` | **Destructive.** Wipes users, patients, appointments, notes, and events, then rebuilds the demo dataset. |
+| `npm run seed` | **Destructive.** Wipes users, patients, appointments, notes, events, alert dismissals and waitlist entries, then rebuilds the demo dataset. |
 | `npm run reindex` | Drops and rebuilds `uniq_provider_slot_active`. Run once per database after pulling the change that let cancelled slots free their time — Mongoose will not reshape an index that already exists under the same name. |
 
 ### Frontend
@@ -657,3 +850,22 @@ dashboard aggregation is scoped the same way as the lists.
 
 **Dismissed alerts came back** — intended. An alert dismissed before the final
 hour returns when the appointment enters it, flagged "back after dismissal".
+
+**Two patients on one doctor at the same time** — a database seeded before the
+overlap pass existed. The old seed dropped its six alert appointments onto the
+quarter hours on top of a diary sitting on the half hours, so a 14:15 booking
+ran through the 14:30 slot. Re-run `npm run seed`: it now clears whatever those
+land across and refuses to write at all if any provider is left double-booked.
+
+**"Seed would double-book Dr Patel: … runs into …"** — working as intended. The
+seed found a clash in what it was about to write and stopped before writing
+anything, so the database is untouched. It means a change to the slot grid or
+the alert offsets has put two appointments for one provider on top of each other.
+
+**The waitlist says 403 for a provider** — intended, and not a page they are
+shown. The waitlist is a front-desk workflow from the call to the callback, so
+the nav link, the day-sheet banner and all four API routes are reception-only.
+
+**"That slot has already started"** — the waitlist was offering a slot that has
+since gone by while the list sat open. Close and reopen *Find a slot*; the list
+only offers time still to come.

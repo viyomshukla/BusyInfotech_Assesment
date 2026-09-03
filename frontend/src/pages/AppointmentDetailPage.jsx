@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Archive, ArchiveRestore, UserPlus, Pencil } from 'lucide-react';
+import {
+  ArrowLeft, Plus, X, Archive, ArchiveRestore, UserPlus, Pencil, Receipt, Stethoscope,
+} from 'lucide-react';
 import { useAppointment, useAppointmentMutation } from '../hooks/useAppointment';
 import { useProviders } from '../hooks/useProviders';
 import { useAuth } from '../context/AuthContext';
@@ -8,11 +10,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { TimePicker } from '../components/TimePicker';
 import {
-  Button, Panel, StatusBadge, Modal, Field, Textarea, Select, Input,
+  Button, Panel, StatusBadge, Modal, Field, Textarea, Select, Input, SegmentedControl,
   Loading, ErrorNote, EmptyState,
 } from '../components/ui';
 import {
-  time, fullDate, dateTime, toInputDate, timeInput, toIso, STATUS_LABEL,
+  time, fullDate, dateTime, money, toInputDate, timeInput, toIso, STATUS_LABEL,
 } from '../lib/format';
 
 const NEXT_STEPS = {
@@ -41,6 +43,9 @@ export default function AppointmentDetailPage() {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [supportId, setSupportId] = useState('');
+  // Which ledger is on screen. The front desk opens on billing because that is
+  // what it came for; a provider has nothing to write there and opens on theirs.
+  const [noteKind, setNoteKind] = useState(isFrontDesk ? 'BILLING' : 'CLINICAL');
 
   const mutate = useAppointmentMutation(id, { onError: (e) => setError(e.message) });
 
@@ -65,6 +70,14 @@ export default function AppointmentDetailPage() {
   const canAct = isFrontDesk || isOwner;
   const canWriteNotes = !isFrontDesk && (isOwner || onCareTeam);
   const canCancel = ['OPEN', 'REQUESTED', 'CONFIRMED'].includes(appt.status);
+
+  // Notes written before the split are clinical: that is the only kind that
+  // existed when they were written.
+  const clinical = notes.filter((n) => (n.kind ?? 'CLINICAL') === 'CLINICAL');
+  const billing = notes.filter((n) => n.kind === 'BILLING');
+  const showingBilling = noteKind === 'BILLING';
+  const shownNotes = showingBilling ? billing : clinical;
+  const billedTotal = billing.reduce((sum, n) => sum + (n.amount ?? 0), 0);
 
   const available = providers.filter(
     (p) => p._id !== appt.providerId && !appt.careTeam.some((m) => m.providerId === p._id)
@@ -165,26 +178,64 @@ export default function AppointmentDetailPage() {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="space-y-5">
-          <Panel title="Visit notes" action={<span className="tabular text-xs text-muted">{notes.length}</span>}>
-            {notes.length === 0 ? (
+          {/* One visit, two ledgers. What was done is the provider's record;
+              what it costs is the desk's. They are kept side by side rather
+              than mixed, so neither has to be read around to find the other. */}
+          <Panel
+            title="Visit notes"
+            action={
+              <SegmentedControl
+                ariaLabel="Which notes"
+                value={noteKind}
+                onChange={setNoteKind}
+                options={[
+                  {
+                    value: 'CLINICAL',
+                    label: clinical.length ? `Clinical (${clinical.length})` : 'Clinical',
+                  },
+                  {
+                    value: 'BILLING',
+                    label: billing.length ? `Billing (${billing.length})` : 'Billing',
+                  },
+                ]}
+              />
+            }
+          >
+            {showingBilling && billing.length > 0 && (
+              <div className="flex items-center justify-between border-b border-rule bg-surface-sunk px-5 py-2.5">
+                <span className="text-xs text-muted">Total billed for this visit</span>
+                <span className="tabular text-sm font-semibold">{money(billedTotal) ?? '—'}</span>
+              </div>
+            )}
+
+            {shownNotes.length === 0 ? (
               <EmptyState
-                title="No notes yet"
-                hint={canWriteNotes ? 'Add what happened at this visit.' : 'Notes are written by providers.'}
+                icon={showingBilling ? Receipt : Stethoscope}
+                title={showingBilling ? 'Nothing billed yet' : 'No clinical notes yet'}
+                hint={
+                  showingBilling
+                    ? isFrontDesk
+                      ? 'Record what this visit is charged at and the code it goes out under.'
+                      : 'Billing is kept by the front desk.'
+                    : canWriteNotes
+                      ? 'Add what happened at this visit.'
+                      : 'Clinical notes are written by the providers on this appointment.'
+                }
               />
             ) : (
               <ul className="divide-y divide-rule">
-                {notes.map((n) => (
+                {shownNotes.map((n) => (
                   <NoteRow key={n._id} note={n} canEdit={n.authorId === user._id} id={id} onError={setError} />
                 ))}
               </ul>
             )}
 
-            {canWriteNotes && (
+            {!showingBilling && canWriteNotes && (
               <form
                 className="border-t border-rule p-5"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  run({ path: '/notes', body: { body: note } }, () => setNote(''));
+                  run({ path: '/notes', body: { body: note, kind: 'CLINICAL' } }, () => setNote(''));
                 }}
               >
                 <Field label="Add a note">
@@ -200,6 +251,13 @@ export default function AppointmentDetailPage() {
                   <Plus size={14} strokeWidth={2} /> Add note
                 </Button>
               </form>
+            )}
+
+            {showingBilling && isFrontDesk && (
+              <BillingNoteForm
+                busy={mutate.isPending}
+                onSubmit={(body, done) => run({ path: '/notes', body }, done)}
+              />
             )}
           </Panel>
 
@@ -488,17 +546,86 @@ function EditSlotModal({ appt, onClose, onSubmit, busy }) {
   );
 }
 
+function BillingNoteForm({ busy, onSubmit }) {
+  const [body, setBody] = useState('');
+  const [code, setCode] = useState('');
+  const [amount, setAmount] = useState('');
+
+  return (
+    <form
+      className="border-t border-rule p-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(
+          {
+            kind: 'BILLING',
+            body: body.trim(),
+            code: code.trim() || undefined,
+            amount: amount === '' ? undefined : Number(amount),
+          },
+          () => {
+            setBody('');
+            setCode('');
+            setAmount('');
+          }
+        );
+      }}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Code" hint="Optional.">
+          <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CONS-30" />
+        </Field>
+        <Field label="Amount" hint="Optional.">
+          <Input
+            type="number"
+            min={0}
+            step={50}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="800"
+          />
+        </Field>
+      </div>
+
+      <Field label="What is being billed" className="mt-3">
+        <Textarea
+          rows={2}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Consultation fee invoiced. Paid by card at reception."
+          required
+        />
+      </Field>
+
+      <Button type="submit" size="sm" className="mt-3" disabled={busy || !body.trim()}>
+        <Plus size={14} strokeWidth={2} /> Add billing note
+      </Button>
+    </form>
+  );
+}
+
 function NoteRow({ note, canEdit, id, onError }) {
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(note.body);
+  const [code, setCode] = useState(note.code ?? '');
+  const [amount, setAmount] = useState(note.amount ?? '');
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
+
+  const billing = note.kind === 'BILLING';
 
   async function save(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.patch(`/appointments/notes/${note._id}`, { body });
+      await api.patch(`/appointments/notes/${note._id}`, {
+        body,
+        // Sent on every billing save, empty included: a code cleared out of the
+        // field has to come off the note rather than being read as unchanged.
+        ...(billing
+          ? { code: code.trim(), amount: amount === '' ? null : Number(amount) }
+          : {}),
+      });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
       setEditing(false);
     } catch (err) {
@@ -510,6 +637,8 @@ function NoteRow({ note, canEdit, id, onError }) {
 
   function discard() {
     setBody(note.body);
+    setCode(note.code ?? '');
+    setAmount(note.amount ?? '');
     setEditing(false);
   }
 
@@ -517,6 +646,22 @@ function NoteRow({ note, canEdit, id, onError }) {
     <li className="px-5 py-4">
       {editing ? (
         <form onSubmit={save}>
+          {billing && (
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <Field label="Code">
+                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CONS-30" />
+              </Field>
+              <Field label="Amount">
+                <Input
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
           <Textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} required />
           <div className="mt-2 flex gap-2">
             <Button type="submit" size="sm" disabled={saving || !body.trim()}>
@@ -529,6 +674,18 @@ function NoteRow({ note, canEdit, id, onError }) {
         </form>
       ) : (
         <>
+          {billing && (note.code || note.amount != null) && (
+            <div className="mb-1.5 flex items-center gap-2">
+              {note.code && (
+                <span className="tabular rounded border border-rule bg-paper px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                  {note.code}
+                </span>
+              )}
+              {note.amount != null && (
+                <span className="tabular text-sm font-semibold">{money(note.amount)}</span>
+              )}
+            </div>
+          )}
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{note.body}</p>
           <div className="mt-2 flex items-center gap-3 text-xs text-muted">
             <span>{note.authorName}</span>

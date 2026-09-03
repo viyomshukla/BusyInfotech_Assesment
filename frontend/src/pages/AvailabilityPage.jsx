@@ -37,6 +37,7 @@ export default function AvailabilityPage() {
     setBlocks((b) => b.map((block, i) => (i === index ? { ...block, [key]: value } : block)));
   }
 
+
   // The same arithmetic the API will do, run as you type. Slots that clash with
   // an existing booking are skipped server-side, so this is the ceiling rather
   // than a promise — which is what the wording below says.

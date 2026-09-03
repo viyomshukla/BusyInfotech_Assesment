@@ -21,6 +21,8 @@ const DayPage = lazy(() => import('./pages/DayPage'));
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const StaffPage = lazy(() => import('./pages/StaffPage'));
+const WaitlistPage = lazy(() => import('./pages/WaitlistPage'));
+const DaySheetPrintPage = lazy(() => import('./pages/DaySheetPrintPage'));
 
 // Two people work this schedule at once: the front desk checks a patient in
 // while the provider has the same day sheet open on another screen. Waiting for
@@ -81,6 +83,19 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
+            {/* The printed sheet sits outside the shell on purpose: the rail
+                and the toolbar are not part of what goes on the clipboard, and
+                the cleanest way to keep them off the page is not to render
+                them. Still behind the session — it is patient data. */}
+            <Route
+              path="/day/print"
+              element={
+                <ProtectedRoute>
+                  <Page><DaySheetPrintPage /></Page>
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               element={
                 <ProtectedRoute>
@@ -98,6 +113,14 @@ export default function App() {
                 element={
                   <ProtectedRoute frontDeskOnly>
                     <Page><AvailabilityPage /></Page>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/waitlist"
+                element={
+                  <ProtectedRoute frontDeskOnly>
+                    <Page><WaitlistPage /></Page>
                   </ProtectedRoute>
                 }
               />

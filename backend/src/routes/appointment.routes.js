@@ -6,11 +6,35 @@ import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { STATUSES } from '../models/Appointment.js';
 import * as service from '../services/appointment.service.js';
-import VisitNote from '../models/VisitNote.js';
+import VisitNote, { NOTE_KINDS } from '../models/VisitNote.js';
 import { toCsv } from '../utils/csv.js';
 import { startOfLocalDay, endOfLocalDay } from '../utils/day.js';
 import { format } from 'date-fns';
-const noteSchema = z.object({ body: z.string().min(1).max(5000) });
+// A billing note carries a code and a figure; a clinical one carries neither,
+// and sending them is a sign the caller has the wrong kind.
+const noteSchema = z
+  .object({
+    body: z.string().min(1).max(5000),
+    kind: z.enum(NOTE_KINDS).default('CLINICAL'),
+    code: z.string().trim().max(40).optional(),
+    amount: z.number().min(0).max(1_000_000).optional(),
+  })
+  .refine((v) => v.kind === 'BILLING' || (v.code === undefined && v.amount === undefined), {
+    message: 'A code and an amount belong on a billing note.',
+  });
+
+// An edit cannot change what kind of note it is — the kind decided who was
+// allowed to write it in the first place — so it does not carry one, and the
+// service drops the code and the amount unless the note already holds them.
+// Null and the empty string both mean "clear this" — a code that has been
+// deleted from the field has to actually come off the note, not be read as an
+// absent value and left where it was.
+const noteEditSchema = z.object({
+  body: z.string().min(1).max(5000),
+  code: z.union([z.string().trim().max(40), z.null()]).optional(),
+  amount: z.union([z.number().min(0).max(1_000_000), z.null()]).optional(),
+});
+
 const router = Router();
 router.use(requireAuth);
 
@@ -172,7 +196,7 @@ router.post('/:id/notes', validate(noteSchema), async (req, res) => {
   res.status(201).json(await service.addNote(req.params.id, req.body, req.user));
 });
 
-router.patch('/notes/:noteId', validate(noteSchema), async (req, res) => {
+router.patch('/notes/:noteId', validate(noteEditSchema), async (req, res) => {
   res.json(await service.editNote(req.params.noteId, req.body, req.user));
 });
 

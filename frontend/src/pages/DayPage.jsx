@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Columns3, Download, List, Plus, UserPlus,
+  CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Columns3, Download, List, LocateFixed,
+  Plus, Printer, UserPlus,
 } from 'lucide-react';
 import { addDays, isSameDay, parseISO } from 'date-fns';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useProviders } from '../hooks/useProviders';
+import { useWaitlist } from '../hooks/useWaitlist';
 import { Avatar } from '../components/Layout';
 import { TimePicker } from '../components/TimePicker';
 import {
@@ -22,8 +24,31 @@ import {
 // past it — an empty 07:00 row every morning is just a stripe of wasted screen.
 const DEFAULT_START_HOUR = 8;
 const DEFAULT_END_HOUR = 19;
-const PX_PER_MIN = 1.6;
+// Two pixels a minute. At 1.6 a quarter-hour visit drew 24px tall, which is
+// less than the two lines of text inside it needed — the patient's name was
+// clipped off the bottom of every short appointment on the grid. Visit types
+// made that common rather than rare: a ten-minute vaccination is a normal
+// booking here, not an edge case.
+const PX_PER_MIN = 2;
 const SNAP_MIN = 15;
+
+// Below this a block is too thin to hold anything at all. It only bites under
+// ten minutes — at 2px a minute a ten-minute slot already draws 20px — so a
+// block is almost never taller than the time it actually occupies.
+const MIN_BLOCK_PX = 20;
+
+// How much a block can say depends on how tall it is, and a fifteen-minute
+// visit is not a squashed thirty-minute one — it is a different shape. Short
+// blocks put the time and the patient on a single line, which is the only way
+// the name fits; taller ones stack, and only the tallest can afford a badge.
+// The generated diary is half-hour slots, but the front desk can open a slot of
+// any length, so every size has to be drawn properly.
+function blockTier(height) {
+  if (height < 34) return 'row';
+  if (height < 52) return 'stack';
+  if (height < 74) return 'meta';
+  return 'full';
+}
 
 // A slot with a patient on it, at any point in the visit. Cancelled slots hand
 // the time back, so they count against neither the booked nor the open figure.
@@ -41,6 +66,9 @@ export default function DayPage() {
   );
   const [creating, setCreating] = useState(null);
   const [error, setError] = useState(null);
+  // Bumped by the Now button. The timeline re-anchors whenever this changes,
+  // which is what lets the same gesture work twice in a row.
+  const [jumpSignal, setJumpSignal] = useState(0);
 
   const { isFrontDesk, user } = useAuth();
   const { data: providers = [], error: providerError } = useProviders();
@@ -83,6 +111,25 @@ export default function DayPage() {
       setError('The export failed. Try again.');
     }
   }
+
+  // A new tab, so the sheet on screen stays where it was while the printed one
+  // is being dealt with. `auto` opens the print dialog on arrival.
+  function openPrintSheet() {
+    const query = new URLSearchParams({
+      date,
+      auto: '1',
+      ...(providerId ? { providerId } : {}),
+    });
+    window.open(`/day/print?${query}`, '_blank', 'noopener');
+  }
+
+  // Who is waiting for this particular day. Reception's question, so providers
+  // are not asked to carry it — and the request is not made on their behalf.
+  const { data: waiting } = useWaitlist({
+    date,
+    providerId: providerId || undefined,
+    enabled: isFrontDesk,
+  });
 
   // One column per provider who either works here or appears on the day. A
   // provider is on the day sheet for their own slots and for the ones they
@@ -186,6 +233,20 @@ export default function DayPage() {
           ]}
         />
 
+        {isToday && view === 'timeline' && data.length > 0 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setJumpSignal((n) => n + 1)}
+            title="Scroll the grid back to the current time"
+          >
+            <LocateFixed size={14} strokeWidth={1.75} /> Now
+          </Button>
+        )}
+
+        <Button variant="secondary" size="sm" onClick={openPrintSheet}>
+          <Printer size={14} strokeWidth={1.75} /> Print
+        </Button>
         <Button variant="secondary" size="sm" onClick={exportCsv}>
           <Download size={14} strokeWidth={1.75} /> CSV
         </Button>
@@ -197,6 +258,10 @@ export default function DayPage() {
       <ErrorNote>{error ?? providerError?.message}</ErrorNote>
 
       <DaySummary totals={totals} loading={isLoading} />
+
+      {isFrontDesk && waiting?.count > 0 && (
+        <WaitlistBanner date={date} entries={waiting.items} openSlots={totals.open} />
+      )}
 
       <Panel>
         {isLoading ? (
@@ -216,6 +281,8 @@ export default function DayPage() {
           <Timeline
             columns={columns}
             userId={user._id}
+            date={date}
+            jumpSignal={jumpSignal}
             startHour={startHour}
             endHour={endHour}
             showNow={isToday}
@@ -376,6 +443,60 @@ function DaySummary({ totals, loading }) {
   );
 }
 
+// Reception spots a gap on the sheet; the people who would take it are on a
+// list on another page. This is the bridge between the two — it says who is
+// waiting for this particular day, and hands over with the day already filtered.
+function WaitlistBanner({ date, entries, openSlots }) {
+  const shown = entries.slice(0, 4);
+  const rest = entries.length - shown.length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-accent/25
+                    bg-accent-soft/60 px-5 py-3.5">
+      <span
+        aria-hidden
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface text-accent"
+      >
+        <ClipboardList size={16} strokeWidth={1.75} />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          {entries.length} {entries.length === 1 ? 'patient is' : 'patients are'} waiting for this day
+        </p>
+        <p className="mt-0.5 text-xs text-muted">
+          {openSlots > 0
+            ? `${openSlots} ${openSlots === 1 ? 'slot is' : 'slots are'} still open — one of them could have it.`
+            : 'Nothing is open yet. The moment something is cancelled, it can go to one of them.'}
+        </p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {shown.map((entry) => (
+            <span
+              key={entry._id}
+              className="inline-flex items-center gap-1.5 rounded-full border border-rule bg-surface
+                         px-2 py-0.5 text-[11px]"
+            >
+              {entry.patientName}
+              <span className="text-faint">{entry.providerName ?? 'any provider'}</span>
+            </span>
+          ))}
+          {rest > 0 && <span className="text-[11px] text-muted">+{rest} more</span>}
+        </div>
+      </div>
+
+      <Link
+        to={`/waitlist?date=${date}`}
+        className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-surface px-2.5
+                   py-1.5 text-xs font-medium shadow-card transition-colors hover:border-accent
+                   hover:text-accent"
+      >
+        Open the waitlist
+      </Link>
+    </div>
+  );
+}
+
 function Legend({ appointments }) {
   const present = [...new Set(appointments.map((a) => a.status))];
 
@@ -463,8 +584,17 @@ function packLanes(appointments) {
   return placed;
 }
 
-function Timeline({ columns, userId, startHour, endHour, showNow, canCreate, onCreate, onOpen }) {
+// How much of the hour just gone stays on screen above the current time. An
+// hour is enough to see the appointment that has just finished and the one
+// running late, without giving the morning half the screen.
+const LEAD_MIN = 60;
+
+function Timeline({
+  columns, userId, date, jumpSignal, startHour, endHour, showNow, canCreate, onCreate, onOpen,
+}) {
   const [now, setNow] = useState(() => new Date());
+  const scroller = useRef(null);
+  const anchoredTo = useRef(null);
 
   // The line marking the present has to move on its own, or it quietly becomes
   // a lie about where the clinic is in its day.
@@ -482,8 +612,49 @@ function Timeline({ columns, userId, startHour, endHour, showNow, canCreate, onC
   const nowOffset = (now.getHours() - startHour) * 60 + now.getMinutes();
   const nowVisible = showNow && nowOffset >= 0 && nowOffset <= hours.length * 60;
 
+  // Opening today's sheet at 12:43 onto a grid that starts at 08:00 means
+  // scrolling past four hours of finished appointments to find out what is
+  // happening now. The grid opens on the hour before the current one instead,
+  // so the present is on screen and the morning is a scroll upwards.
+  //
+  // It anchors once per day, and again when the Now button asks: re-running it
+  // on every clock tick would yank the grid out from under anyone reading it.
+  const lastSignal = useRef(jumpSignal);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+
+    const key = `${date}:${jumpSignal}`;
+    if (anchoredTo.current === key) return;
+    anchoredTo.current = key;
+
+    // Arriving on the day lands where it lands; pressing Now is a movement the
+    // eye should be able to follow. Unless the browser has been told not to.
+    const asked = jumpSignal !== lastSignal.current;
+    lastSignal.current = jumpSignal;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const behavior = asked && !still ? 'smooth' : 'auto';
+
+    // Any other day opens at the start of its own grid; there is no "now" on it.
+    if (!showNow) {
+      el.scrollTo({ top: 0, behavior });
+      return;
+    }
+
+    const at = new Date();
+    const minutesFromTop = (at.getHours() - startHour) * 60 + at.getMinutes();
+    // Snapped back to a whole hour so the grid opens on a labelled line rather
+    // than mid-way between two: at 12:43 that is 11:00 at the top.
+    const anchor = Math.floor((minutesFromTop - LEAD_MIN) / 60) * 60;
+
+    // The column headers are sticky at the top of this scroller, so scrolling
+    // by exactly the anchor's offset leaves it sitting just below them.
+    el.scrollTo({ top: Math.max(0, anchor * PX_PER_MIN), behavior });
+  }, [date, jumpSignal, showNow, startHour, gridHeight]);
+
   return (
-    <div className="max-h-[72vh] overflow-auto">
+    <div ref={scroller} className="max-h-[72vh] overflow-auto">
       <div className="flex min-w-full">
         {/* Time gutter. Sticky sideways so the hours stay readable when a wide
             roster pushes the later columns off-screen. */}
@@ -582,7 +753,14 @@ function TimelineColumn({
               top: nowOffset * PX_PER_MIN,
               borderColor: 'var(--color-status-noshow)',
             }}
-          />
+          >
+            {/* A line alone reads as another hour rule at a glance. The bead on
+                the end is what separates the present from the furniture. */}
+            <span
+              className="absolute -top-0.75 left-0 block size-1.5 rounded-full"
+              style={{ background: 'var(--color-status-noshow)' }}
+            />
+          </div>
         )}
 
         {placed.map(({ appt, lane, lanes }) => (
@@ -607,14 +785,29 @@ function SlotBlock({ appt, userId, startHour, lane, lanes, onOpen }) {
   if (minutesFromTop < 0) return null;
 
   const top = minutesFromTop * PX_PER_MIN;
-  const height = Math.max(appt.durationMin * PX_PER_MIN, 26);
+  const height = Math.max(appt.durationMin * PX_PER_MIN, MIN_BLOCK_PX);
   const width = 100 / lanes;
   const isOpen = appt.status === 'OPEN';
   const dropped = appt.status === 'CANCELLED' || appt.status === 'NO_SHOW';
   const support = supporting(appt, userId);
-  // A half-hour block is 48px: enough for the time, the patient and one more
-  // line, which is where the supporting doctor's name goes.
-  const roomForSupport = height >= 44;
+
+  const tier = blockTier(height);
+  const name = appt.patientName ?? 'Open';
+
+  const nameClasses = `truncate text-ink ${
+    isOpen ? 'font-normal text-muted' : 'font-medium'
+  } ${dropped ? 'line-through' : ''}`;
+
+  // Whatever the block was too short to print is on the hover, so nothing is
+  // reachable only by opening the appointment.
+  const title = [
+    `${time(appt.startsAt)}–${time(appt.endsAt)}`,
+    name,
+    appt.providerName,
+    support?.short,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <button
@@ -622,6 +815,7 @@ function SlotBlock({ appt, userId, startHour, lane, lanes, onOpen }) {
         e.stopPropagation();
         onOpen(appt._id);
       }}
+      title={title}
       style={{
         top,
         height,
@@ -629,45 +823,53 @@ function SlotBlock({ appt, userId, startHour, lane, lanes, onOpen }) {
         width: `calc(${width}% - 6px)`,
         '--tint-color': STATUS_COLOR[appt.status],
       }}
-      className={`tint-block absolute overflow-hidden rounded-lg border px-2 py-1 text-left
-                  transition-colors ${isOpen ? 'border-dashed' : ''} ${
-                    dropped ? 'opacity-70' : ''
-                  }`}
+      className={`tint-block absolute flex flex-col overflow-hidden rounded-lg border text-left
+                  transition-colors ${tier === 'row' ? 'justify-center px-1.5 py-0' : 'px-2 py-1'}
+                  ${isOpen ? 'border-dashed' : ''} ${dropped ? 'opacity-70' : ''}`}
     >
-      {/* On a block too short for even one more line the care team still has
-          to register, so it falls back to a marker in the corner. */}
-      {support && !roomForSupport && (
-        <span
-          title={support.full}
-          aria-label={support.full}
-          className={`absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full
-                      text-white ${support.you ? 'bg-status-checkedin' : 'bg-accent'}`}
-        >
-          <UserPlus size={8} strokeWidth={2.5} />
+      {tier === 'row' ? (
+        // A quarter of an hour or less. Stacking two lines here is what was
+        // cutting the name off, so the two facts share one line instead and
+        // the time gives up its width first — a slot with no name on it is
+        // useless, and the row already sits at its own time on the grid.
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="tabular shrink-0 text-[10px] leading-none opacity-70">
+            {time(appt.startsAt)}
+          </span>
+          <span className={`min-w-0 flex-1 text-[11px] leading-none ${nameClasses}`}>{name}</span>
+          {support && (
+            <UserPlus
+              size={9}
+              strokeWidth={2.5}
+              aria-label={support.full}
+              className={`shrink-0 self-center ${
+                support.you ? 'text-status-checkedin' : 'text-accent'
+              }`}
+            />
+          )}
         </span>
-      )}
+      ) : (
+        <>
+          <p className="tabular truncate text-[10px] leading-tight opacity-70">
+            {time(appt.startsAt)}
+            {tier === 'stack' ? '' : `–${time(appt.endsAt)}`}
+          </p>
+          <p className={`text-xs leading-tight ${nameClasses}`}>{name}</p>
 
-      <p className="tabular truncate text-[10px] leading-tight opacity-70">
-        {time(appt.startsAt)}
-        {height > 40 && appt.endsAt ? `–${time(appt.endsAt)}` : ''}
-      </p>
-      <p
-        className={`truncate text-xs leading-tight text-ink ${
-          isOpen ? 'font-normal text-muted' : 'font-medium'
-        } ${dropped ? 'line-through' : ''}`}
-      >
-        {appt.patientName ?? 'Open'}
-      </p>
+          {/* One spare line, which the supporting doctor takes if there is one:
+              whoever reads the sheet needs to know the room is double-covered
+              without opening the appointment. */}
+          {tier === 'meta' && support && <SupportNote note={support} bare />}
 
-      {support && roomForSupport && <SupportNote note={support} bare />}
-
-      {/* The badge is the first thing to go when the block is short, and a
-          slot carrying a support line needs one more row's worth of height
-          before it can carry a badge as well. */}
-      {height > (support && roomForSupport ? 74 : 62) && (
-        <div className="mt-1">
-          <StatusBadge status={appt.status} />
-        </div>
+          {tier === 'full' && (
+            <>
+              {support && <SupportNote note={support} bare />}
+              <div className="mt-1">
+                <StatusBadge status={appt.status} />
+              </div>
+            </>
+          )}
+        </>
       )}
     </button>
   );

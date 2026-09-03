@@ -157,8 +157,13 @@ export async function generateSlots(input, actor) {
     );
   }
 
-  const rangeStart = candidates[0].startsAt;
-  const rangeEnd = candidates[candidates.length - 1].endsAt;
+  // Blocks are not necessarily given in time order, and each one carries its
+  // own length, so the last candidate is not reliably the latest finish. The
+  // window has to cover every candidate or an existing booking just past its
+  // edge goes unseen, and the insert fails on the unique index instead of
+  // being reported as a skip.
+  const rangeStart = new Date(Math.min(...candidates.map((c) => c.startsAt.getTime())));
+  const rangeEnd = new Date(Math.max(...candidates.map((c) => c.endsAt.getTime())));
 
   const existing = await Appointment.find({
     providerId,
@@ -265,24 +270,45 @@ async function loadOr404(id, session) {
   if (!appt) throw new RuleError('Appointment not found.', 404);
   return appt;
 }
-export async function addNote(appointmentId, { body }, actor) {
+export async function addNote(appointmentId, { body, kind = 'CLINICAL', code, amount }, actor) {
   return withTransaction(async (session) => {
     const appt = await loadOr404(appointmentId, session);
 
-    if (actor.role !== 'PROVIDER') {
-      throw new RuleError('Only providers can write visit notes.', 403);
+    // The two kinds of note are written by opposite ends of the clinic. What a
+    // provider did belongs to the provider who did it; what it costs belongs to
+    // the desk that invoices it. Neither role can write in the other's column.
+    if (kind === 'BILLING') {
+      if (actor.role !== 'FRONT_DESK') {
+        throw new RuleError('Only front-desk staff can write billing notes.', 403);
+      }
+    } else {
+      if (actor.role !== 'PROVIDER') {
+        throw new RuleError('Only providers can write visit notes.', 403);
+      }
+
+      const onCareTeam = appt.careTeam.some(
+        (m) => m.providerId.toString() === actor._id.toString()
+      );
+      const isScheduling = appt.providerId.toString() === actor._id.toString();
+      if (!isScheduling && !onCareTeam) {
+        throw new RuleError('You are not on this appointment.', 403);
+      }
     }
 
-    const onCareTeam = appt.careTeam.some(
-      (m) => m.providerId.toString() === actor._id.toString()
-    );
-    const isScheduling = appt.providerId.toString() === actor._id.toString();
-    if (!isScheduling && !onCareTeam) {
-      throw new RuleError('You are not on this appointment.', 403);
-    }
+    const billing = kind === 'BILLING';
 
     const [note] = await VisitNote.create(
-      [{ appointmentId: appt._id, authorId: actor._id, authorName: actor.name, body }],
+      [
+        {
+          appointmentId: appt._id,
+          authorId: actor._id,
+          authorName: actor.name,
+          body,
+          kind,
+          code: billing ? (code ?? null) : null,
+          amount: billing ? (amount ?? null) : null,
+        },
+      ],
       { session }
     );
 
@@ -291,7 +317,7 @@ export async function addNote(appointmentId, { body }, actor) {
         appointmentId: appt._id,
         actor,
         type: 'NOTE_ADDED',
-        detail: { noteId: note._id.toString() },
+        detail: { noteId: note._id.toString(), kind },
       },
       session
     );
@@ -300,7 +326,7 @@ export async function addNote(appointmentId, { body }, actor) {
   });
 }
 
-export async function editNote(noteId, { body }, actor) {
+export async function editNote(noteId, { body, code, amount }, actor) {
   const note = await VisitNote.findById(noteId);
   if (!note) throw new RuleError('Visit note not found.', 404);
 
@@ -309,6 +335,14 @@ export async function editNote(noteId, { body }, actor) {
   }
 
   note.body = body;
+
+  // A code or an amount on a clinical note would be data nothing reads, so the
+  // pair only moves on the notes that carry them.
+  if (note.kind === 'BILLING') {
+    if (code !== undefined) note.code = code || null;
+    if (amount !== undefined) note.amount = amount ?? null;
+  }
+
   await note.save();
   return note;
 }

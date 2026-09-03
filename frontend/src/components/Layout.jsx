@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  LayoutDashboard, CalendarDays, ListChecks, CalendarPlus, Bell, Users, LogOut,
+  LayoutDashboard, CalendarDays, ListChecks, CalendarPlus, Bell, Users, LogOut, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAlerts } from '../hooks/useAlerts';
@@ -13,6 +13,7 @@ const LINKS = [
   { to: '/day', label: 'Day sheet', icon: CalendarDays },
   { to: '/appointments', label: 'Appointments', icon: ListChecks },
   { to: '/alerts', label: 'Alerts', icon: Bell, alerts: true },
+  { to: '/waitlist', label: 'Waitlist', icon: ClipboardList, frontDeskOnly: true },
   { to: '/availability', label: 'Availability', icon: CalendarPlus, frontDeskOnly: true },
   { to: '/staff', label: 'Staff', icon: Users, frontDeskOnly: true },
 ];

@@ -27,6 +27,14 @@ export function toInputDate(value = new Date()) {
   return format(new Date(value), 'yyyy-MM-dd');
 }
 
+// Billing amounts. The clinic bills in rupees and the figure is read by the
+// person who typed it in, so it keeps the local grouping rather than being
+// rendered in some neutral international shape nobody here writes.
+export function money(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return `₹${Number(value).toLocaleString('en-IN')}`;
+}
+
 export const STATUS_LABEL = {
   OPEN: 'Open',
   REQUESTED: 'Requested',

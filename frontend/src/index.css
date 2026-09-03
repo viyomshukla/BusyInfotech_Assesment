@@ -154,3 +154,58 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The printed day sheet.
+
+   The desk still works off paper for the day itself — it goes on a clipboard,
+   gets ticked, and gets written on. So the printed sheet is not a screenshot
+   of the app: the controls come off, the colour comes off, and what is left is
+   a table with room in the margin to write. */
+@page {
+  size: A4 portrait;
+  margin: 13mm 12mm;
+}
+
+@media print {
+  /* Anything that only exists to be clicked. */
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .print-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* A shadow prints as grey mud and costs toner to say nothing. */
+  .print-sheet *,
+  .print-sheet {
+    box-shadow: none !important;
+  }
+
+  /* A row broken over a page turn loses either the time or the patient. */
+  .print-sheet tr {
+    break-inside: avoid;
+  }
+
+  /* The column headings repeat at the top of every sheet, so page four is
+     still readable on its own. */
+  .print-sheet thead {
+    display: table-header-group;
+  }
+
+  /* Browsers drop backgrounds when printing unless a rule insists. The status
+     rule down the edge of each row is the one piece of colour worth keeping —
+     it is how a full sheet is read at a glance. */
+  .print-keep-color {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

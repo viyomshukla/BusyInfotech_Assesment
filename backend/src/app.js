@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.routes.js';
 import appointmentRoutes from './routes/appointment.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import userRoutes from './routes/user.routes.js';
+import waitlistRoutes from './routes/waitlist.routes.js';
 const app = express();
 
 app.set('trust proxy', 1);
@@ -45,6 +46,7 @@ app.get('/health', (req, res) => {
 });
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/waitlist', waitlistRoutes);
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
