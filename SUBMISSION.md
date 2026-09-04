@@ -215,4 +215,4 @@ admitting rather than hoping nobody looks.
 | [docs/architecture.md](docs/architecture.md) | The moving pieces, where each one runs, one request traced end to end, and what I chose not to build. |
 | [docs/schema.md](docs/schema.md) | Every collection field by field, the relationships, which rules the database enforces versus the code, and what breaks first at 100x the data. |
 | [docs/decisions.md](docs/decisions.md) | Ten decisions where a real alternative existed — including the one I got wrong and reversed, and the double-booking I shipped without noticing. |
-| [docs/ai-prompts.md](docs/ai-prompts.md) | How I used AI, what it got right, and the two bugs it confidently produced because I asked the wrong question. |
+| [docs/ai-prompts.md](docs/ai-prompt.md) | How I used AI, what it got right, and the two bugs it confidently produced because I asked the wrong question. |
