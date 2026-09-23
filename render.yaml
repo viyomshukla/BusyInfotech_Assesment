@@ -11,6 +11,10 @@ services:
       # Render supplies PORT itself — do not set it here.
       - key: NODE_ENV
         value: production
+      # Slot times and day boundaries are built in the server's local time.
+      # Render runs in UTC, so without this 21:00 lands at 02:30 in India.
+      - key: TZ
+        value: Asia/Kolkata
       - key: JWT_SECRET
         generateValue: true
       # Set these two in the dashboard: the Atlas connection string, and the
